@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import  YahooFinance  from 'yahoo-finance2'; 
+import YahooFinance  from 'yahoo-finance2'; 
 import { calculateRRGData } from '@/lib/rrgMath';
 
 const yf = new YahooFinance({
@@ -13,6 +13,8 @@ const SECTORS = [
   { symbol: '^CNXMETAL', name: 'Metal' },
   { symbol: '^CNXFMCG', name: 'FMCG' },
   { symbol: '^CNXREALTY', name: 'Realty' },
+  { symbol: '^CNXPSUBANK', name: 'PSU Bank' }, // Added
+  { symbol: '^CNXENERGY', name: 'Energy' },     // Added
 ];
 
 const BENCHMARK = '^NSEI';
