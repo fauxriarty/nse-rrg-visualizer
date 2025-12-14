@@ -25,17 +25,17 @@ export default function Home() {
   useEffect(() => { fetchData(); }, []);
 
   return (
-    <main className="min-h-screen bg-[#020617] text-slate-200 font-sans p-6 md:p-8">
+    <main className="min-h-screen bg-[#020617] text-slate-200 font-sans p-4 sm:p-6 md:p-8">
       
       {/* HEADER */}
-      <header className="max-w-7xl mx-auto mb-10 flex justify-between items-center border-b border-slate-800 pb-6">
+      <header className="max-w-7xl mx-auto mb-8 sm:mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 border-b border-slate-800 pb-6">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-500/20">
-            <Activity className="w-6 h-6 text-white" />
+            <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
-            <p className="text-slate-400 text-sm font-medium">Relative Strength & Momentum Visualizer</p>
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
+            <p className="text-slate-400 text-xs sm:text-sm font-medium">Relative Strength & Momentum Visualizer</p>
           </div>
         </div>
         
@@ -50,17 +50,17 @@ export default function Home() {
       </header>
 
       {/* NEW: SCALING & METHODOLOGY EXPLANATION */}
-      <div className="max-w-7xl mx-auto mb-12">
+      <div className="max-w-7xl mx-auto mb-8 sm:mb-12">
         <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-6 relative overflow-hidden">
           {/* Subtle Background Glow */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
           
           <div className="flex items-center gap-2 mb-6">
              <Info className="w-5 h-5 text-blue-500" />
-             <h2 className="text-xl font-bold text-white">How to Read the Scales (Normalization)</h2>
+             <h2 className="text-lg sm:text-xl font-bold text-white">How to Read the Scales (Normalization)</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 text-xs sm:text-sm">
             
             {/* LEFT: THE BASELINE */}
             <div className="space-y-4">
@@ -87,11 +87,11 @@ export default function Home() {
               </p>
               <ul className="space-y-2 mt-2">
                 <li className="flex gap-3">
-                   <span className="font-mono text-emerald-400 font-bold min-w-[3rem]">102</span>
+                   <span className="font-mono text-emerald-400 font-bold min-w-12">102</span>
                    <span>Means the sector is roughly <strong>2% stronger</strong> than the benchmark trend.</span>
                 </li>
                 <li className="flex gap-3">
-                   <span className="font-mono text-red-400 font-bold min-w-[3rem]">98</span>
+                   <span className="font-mono text-red-400 font-bold min-w-12">98</span>
                    <span>Means the sector is roughly <strong>2% weaker</strong> than the benchmark trend.</span>
                 </li>
               </ul>
@@ -102,13 +102,13 @@ export default function Home() {
       </div>
 
       {/* STRATEGY SECTION */}
-      <div className="max-w-7xl mx-auto mb-12 space-y-6">
+      <div className="max-w-7xl mx-auto mb-8 sm:mb-12 space-y-6">
         <div className="flex items-center gap-2 mb-2">
           <Target className="w-5 h-5 text-blue-500" />
-          <h2 className="text-xl font-bold text-white">Analysis Strategy</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-white">Analysis Strategy</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
           <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-2 mb-4 text-emerald-400">
               <TrendingUp className="w-4 h-4" />
@@ -146,9 +146,9 @@ export default function Home() {
       </div>
 
       {/* CHART CONTAINER */}
-      <div className="max-w-7xl mx-auto mb-10">
+      <div className="max-w-7xl mx-auto mb-8 sm:mb-10">
         {loading || data.length === 0 ? (
-          <div className="w-full h-[600px] flex flex-col items-center justify-center bg-[#0B1121] rounded-xl border border-slate-800">
+          <div className="w-full h-80 sm:h-120 md:h-150 flex flex-col items-center justify-center bg-[#0B1121] rounded-xl border border-slate-800">
             <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4" />
             <p className="text-slate-400 text-sm font-medium animate-pulse">Computing Sector Rotation...</p>
           </div>
@@ -159,11 +159,11 @@ export default function Home() {
 
       {/* QUADRANT DEFINITIONS */}
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <h2 className="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
           <Activity className="w-4 h-4 text-slate-400" /> 
           Quadrant Interpretation
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <StatusCard 
             title="Leading" 
             color="text-emerald-400" 
@@ -210,7 +210,7 @@ function StatusCard({ title, color, bg, border, desc, action }: any) {
       <h3 className={`font-bold uppercase tracking-wider text-sm mb-2 flex items-center gap-2 ${color}`}>
         <TrendingUp className="w-4 h-4" /> {title}
       </h3>
-      <p className="text-xs text-slate-400 leading-relaxed mb-4 h-10 font-medium opacity-90">{desc}</p>
+      <p className="text-xs text-slate-400 leading-relaxed mb-6 h-10 font-medium opacity-90">{desc}</p>
       <div className={`text-xs font-bold flex items-center gap-1 uppercase tracking-wider ${color}`}>
         {action} <ArrowRight className="w-3 h-3" />
       </div>
