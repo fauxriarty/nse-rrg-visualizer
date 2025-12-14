@@ -1,18 +1,55 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
-import { RefreshCw, Activity, ArrowRight, TrendingUp, Target, Zap, Clock, Info } from 'lucide-react';
+import { 
+  RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
+  Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
+  BookOpen, Calculator, Database, Server, Sigma, LineChart
+} from 'lucide-react';
+
+// --- CONSTANTS ---
+const INTERVAL_OPTIONS = [
+  { label: 'Daily', value: '1d' },
+  { label: 'Weekly', value: '1wk' },
+  { label: 'Monthly', value: '1mo' },
+];
 
 export default function Home() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  // Default: Weekly, 14 RS, 1 ROC (Standard RRG)
+  const [interval, setIntervalState] = useState('1wk');
+  const [rsWindow, setRsWindow] = useState('14');
+  const [rocWindow, setRocWindow] = useState('1');
+
+  // --- DYNAMIC OPTIONS ---
+  const rsOptions = useMemo(() => {
+    const opts = [{ label: '10 Bars', value: 10 }, { label: '14 Bars (Std)', value: 14 }];
+    if (interval === '1mo') return [{ label: '6 Bars', value: 6 }, ...opts];
+    return [...opts, { label: '20 Bars', value: 20 }, { label: '28 Bars', value: 28 }, { label: '50 Bars', value: 50 }];
+  }, [interval]);
+
+  const rocOptions = useMemo(() => {
+    const fastOpts = [{ label: '1 Bar (Fast)', value: 1 }, { label: '3 Bars', value: 3 }];
+    if (interval === '1mo') return fastOpts;
+    return [...fastOpts, { label: '5 Bars', value: 5 }, { label: '10 Bars', value: 10 }, { label: '12 Bars', value: 12 }, { label: '14 Bars', value: 14 }];
+  }, [interval]);
+
+  useEffect(() => {
+    const validRs = rsOptions.map(o => o.value.toString());
+    const validRoc = rocOptions.map(o => o.value.toString());
+    if (!validRs.includes(rsWindow)) setRsWindow(validRs[validRs.length - 1]); 
+    if (!validRoc.includes(rocWindow)) setRocWindow(validRoc[0]); 
+  }, [interval, rsOptions, rocOptions, rsWindow, rocWindow]);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/market-data');
-      if (!res.ok) throw new Error('Failed');
+      const params = new URLSearchParams({ interval, rsWindow, rocWindow });
+      const res = await fetch(`/api/market-data?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch data');
       const json = await res.json();
       if (json.sectors) setData(json.sectors);
     } catch (err) {
@@ -20,199 +57,218 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [interval, rsWindow, rocWindow]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   return (
-    <main className="min-h-screen bg-[#020617] text-slate-200 font-sans p-4 sm:p-6 md:p-8">
+    <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
       
       {/* HEADER */}
-      <header className="max-w-7xl mx-auto mb-8 sm:mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 border-b border-slate-800 pb-6">
+      <header className="max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-600 rounded-lg shadow-lg shadow-blue-500/20">
-            <Activity className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
+            <Activity className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
             <p className="text-slate-400 text-xs sm:text-sm font-medium">Relative Strength & Momentum Visualizer</p>
           </div>
         </div>
-        
-        <button 
-          onClick={fetchData}
-          disabled={loading}
-          className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-semibold transition-all border border-slate-700 hover:border-slate-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+        <button onClick={fetchData} disabled={loading} className="w-full sm:w-auto flex justify-center items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Crunching Data...' : 'Refresh Analysis'}
+          {loading ? 'Calculating...' : 'Update Chart'}
         </button>
       </header>
 
-      {/* NEW: SCALING & METHODOLOGY EXPLANATION */}
-      <div className="max-w-7xl mx-auto mb-8 sm:mb-12">
-        <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-6 relative overflow-hidden">
-          {/* Subtle Background Glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-          
-          <div className="flex items-center gap-2 mb-6">
-             <Info className="w-5 h-5 text-blue-500" />
-             <h2 className="text-lg sm:text-xl font-bold text-white">How to Read the Scales (Normalization)</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 text-xs sm:text-sm">
-            
-            {/* LEFT: THE BASELINE */}
-            <div className="space-y-4">
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs border border-slate-700">1</span>
-                The 100 Baseline
-              </h3>
-              <p className="text-slate-400 leading-relaxed">
-                The entire chart is <strong>normalized to 100</strong>. We take the raw performance of a sector and divide it by the Nifty 50 benchmark. 
-                <br /><br />
-                <span className="text-white bg-slate-800 px-1.5 py-0.5 rounded">100</span> represents the <strong>Benchmark Average</strong>.
-                If a sector is exactly at 100, it is performing exactly in line with the Nifty 50.
-              </p>
+      {/* CONFIGURATION BAR */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+            <div className="flex items-center gap-3 min-w-48">
+              <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
+                <SlidersHorizontal className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base text-white">Configuration</h2>
+                <p className="text-xs text-slate-500">Adjust math parameters</p>
+              </div>
             </div>
-
-            {/* RIGHT: THE DEVIATION */}
-            <div className="space-y-4">
-              <h3 className="text-white font-semibold flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs border border-slate-700">2</span>
-                Scale Interpretation (e.g., 98 - 102)
-              </h3>
-              <p className="text-slate-400 leading-relaxed">
-                The axes show <strong>percentage deviation</strong> from that trend.
-              </p>
-              <ul className="space-y-2 mt-2">
-                <li className="flex gap-3">
-                   <span className="font-mono text-emerald-400 font-bold min-w-12">102</span>
-                   <span>Means the sector is roughly <strong>2% stronger</strong> than the benchmark trend.</span>
-                </li>
-                <li className="flex gap-3">
-                   <span className="font-mono text-red-400 font-bold min-w-12">98</span>
-                   <span>Means the sector is roughly <strong>2% weaker</strong> than the benchmark trend.</span>
-                </li>
-              </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full lg:w-auto">
+              <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
+              <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+              <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
             </div>
-
-          </div>
-        </div>
-      </div>
-
-      {/* STRATEGY SECTION */}
-      <div className="max-w-7xl mx-auto mb-8 sm:mb-12 space-y-6">
-        <div className="flex items-center gap-2 mb-2">
-          <Target className="w-5 h-5 text-blue-500" />
-          <h2 className="text-lg sm:text-xl font-bold text-white">Analysis Strategy</h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-2 mb-4 text-emerald-400">
-              <TrendingUp className="w-4 h-4" />
-              <h3 className="font-bold text-sm uppercase tracking-wider">1. Identify Leaders</h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              <strong>X-Axis (Trend) {'>'} 100:</strong> Institutional money is flowing HERE. Focus long positions in these sectors.
-            </p>
-          </div>
-
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-2 mb-4 text-blue-400">
-              <Zap className="w-4 h-4" />
-              <h3 className="font-bold text-sm uppercase tracking-wider">2. Spot Reversals</h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              <strong>Y-Axis (Momentum):</strong> Turns first. If a Leader drops below Y=100, the rally is tired. Book profits.
-            </p>
-          </div>
-
-          <div className="bg-[#0f172a] border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-2 mb-4 text-amber-400">
-              <Clock className="w-4 h-4" />
-              <h3 className="font-bold text-sm uppercase tracking-wider">3. The Cycle</h3>
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Markets rotate clockwise: 
-              <span className="text-blue-400 ml-1">Improving</span> → 
-              <span className="text-emerald-400 ml-1">Leading</span> → 
-              <span className="text-amber-400 ml-1">Weakening</span> → 
-              <span className="text-red-400 ml-1">Lagging</span>.
-            </p>
           </div>
         </div>
       </div>
 
       {/* CHART CONTAINER */}
-      <div className="max-w-7xl mx-auto mb-8 sm:mb-10">
+      <div className="max-w-7xl mx-auto mb-16">
         {loading || data.length === 0 ? (
-          <div className="w-full h-80 sm:h-120 md:h-150 flex flex-col items-center justify-center bg-[#0B1121] rounded-xl border border-slate-800">
-            <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4" />
-            <p className="text-slate-400 text-sm font-medium animate-pulse">Computing Sector Rotation...</p>
+          <div className="w-full h-96 sm:h-[500px] md:h-[600px] flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
+            <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
+            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Running RRG Algorithm...</p>
+            <p className="text-slate-500 text-xs mt-2 relative z-10">Fetching history & calculating relative strength</p>
           </div>
         ) : (
           <RRGChart data={data} />
         )}
       </div>
 
-      {/* QUADRANT DEFINITIONS */}
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-base sm:text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-slate-400" /> 
-          Quadrant Interpretation
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <StatusCard 
-            title="Leading" 
-            color="text-emerald-400" 
-            bg="bg-emerald-500/10" 
-            border="border-emerald-500/20" 
-            desc="Outperforming & Accelerating. The strongest sectors attracting aggressive buying." 
-            action="Buy / Hold" 
-          />
-          <StatusCard 
-            title="Weakening" 
-            color="text-amber-400" 
-            bg="bg-amber-500/10" 
-            border="border-amber-500/20" 
-            desc="Still strong, but losing steam. Smart money is starting to take profits here." 
-            action="Book Profit" 
-          />
-          <StatusCard 
-            title="Lagging" 
-            color="text-red-400" 
-            bg="bg-red-500/10" 
-            border="border-red-500/20" 
-            desc="Underperforming & Weak. Money is flowing OUT of these sectors." 
-            action="Avoid / Short" 
-          />
-          <StatusCard 
-            title="Improving" 
-            color="text-blue-400" 
-            bg="bg-blue-500/10" 
-            border="border-blue-500/20" 
-            desc="Underperforming but gaining momentum. Accumulation phase starting." 
-            action="Watchlist" 
-          />
+      {/* --- 3-COLUMN INFO GRID --- */}
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
+        
+        {/* 1. DATA ARCHITECTURE */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
+          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
+             <div className="p-2 bg-purple-500/10 rounded-lg"><Server className="w-5 h-5 text-purple-500" /></div>
+             <h2 className="text-lg font-bold text-white">Data Architecture</h2>
+          </div>
+          <div className="space-y-5 text-sm text-slate-400">
+            <div>
+              <h3 className="text-slate-200 font-semibold mb-1 flex items-center gap-2">
+                <Database className="w-3.5 h-3.5" /> The "Iceberg" Fetch
+              </h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                To calculate a single point (e.g. 50-bar trend), we need massive history. We fetch <strong>2 years</strong> for Daily and <strong>5 years</strong> for Weekly charts. This buffer prevents errors during market holidays.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-slate-200 font-semibold mb-1 flex items-center gap-2">
+                <Zap className="w-3.5 h-3.5" /> Null-Tolerant Engine
+              </h3>
+              <p className="text-xs leading-relaxed opacity-90">
+                If a sector (like a new IPO) lacks data, our math engine doesn't crash. It dynamically shrinks the smoothing window to the "best possible" fit for that specific stock.
+              </p>
+            </div>
+          </div>
         </div>
+
+        {/* 2. THE MATH ENGINE */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
+          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
+             <div className="p-2 bg-blue-500/10 rounded-lg"><Calculator className="w-5 h-5 text-blue-500" /></div>
+             <h2 className="text-lg font-bold text-white">The Math Engine</h2>
+          </div>
+          <div className="space-y-4">
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">1. Relative Strength (RS)</div>
+              <code className="text-xs text-blue-300 font-mono block">Price_Sector / Price_Nifty50</code>
+            </div>
+            
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">2. Simple Moving Average (SMA)</div>
+              <p className="text-[10px] text-slate-400 mb-1">Smoothes the curve. 'n' = RS Period.</p>
+              <code className="text-xs text-blue-300 font-mono block">Sum(Last_n_RS) / n</code>
+            </div>
+
+            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">3. Momentum (Y-Axis)</div>
+              <p className="text-[10px] text-slate-400 mb-1">Velocity vs 'n' bars ago. 'n' = ROC Period.</p>
+              <code className="text-xs text-blue-300 font-mono block">(Ratio_Now / Ratio_n_Ago) * 100</code>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. STRATEGY PLAYBOOK */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
+          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
+             <div className="p-2 bg-emerald-500/10 rounded-lg"><BookOpen className="w-5 h-5 text-emerald-500" /></div>
+             <h2 className="text-lg font-bold text-white">Strategy Playbook</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-3 h-full">
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+              <div className="p-1.5 bg-emerald-500/20 rounded text-emerald-400"><TrendingUp className="w-4 h-4" /></div>
+              <div>
+                <span className="text-xs font-bold text-emerald-400 block uppercase">Leading (Top Right)</span>
+                <span className="text-[10px] text-slate-400">Trend Strong + Speed Increasing. <strong>Buy.</strong></span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+              <div className="p-1.5 bg-amber-500/20 rounded text-amber-400"><Clock className="w-4 h-4" /></div>
+              <div>
+                <span className="text-xs font-bold text-amber-400 block uppercase">Weakening (Bottom Right)</span>
+                <span className="text-[10px] text-slate-400">Trend Strong + Speed Falling. <strong>Book Profit.</strong></span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-red-500/5 border border-red-500/10">
+              <div className="p-1.5 bg-red-500/20 rounded text-red-400"><TrendingUp className="w-4 h-4 rotate-180" /></div>
+              <div>
+                <span className="text-xs font-bold text-red-400 block uppercase">Lagging (Bottom Left)</span>
+                <span className="text-[10px] text-slate-400">Trend Weak + Speed Falling. <strong>Avoid.</strong></span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/5 border border-blue-500/10">
+              <div className="p-1.5 bg-blue-500/20 rounded text-blue-400"><Zap className="w-4 h-4" /></div>
+              <div>
+                <span className="text-xs font-bold text-blue-400 block uppercase">Improving (Top Left)</span>
+                <span className="text-[10px] text-slate-400">Trend Weak + Speed Rising. <strong>Watchlist.</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
+
+      {/* FOOTER */}
+       <div className="max-w-7xl mx-auto border-t border-slate-800 pt-8 text-slate-500 text-xs sm:text-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+         <p className="flex items-center gap-2">
+           <Info className="w-4 h-4" />
+           <span>Benchmark: <strong>Nifty 50</strong> (^NSEI)</span>
+         </p>
+         <p>Data provided by Yahoo Finance (Delayed 15m).</p>
+       </div>
 
     </main>
   );
 }
 
-// Reusable Card Component
-function StatusCard({ title, color, bg, border, desc, action }: any) {
+// --- HELPER COMPONENTS ---
+
+function CustomSelect({ label, icon, value, onChange, options }: any) {
   return (
-    <div className={`p-5 rounded-xl border ${border} ${bg} backdrop-blur-sm transition-transform hover:-translate-y-1`}>
-      <h3 className={`font-bold uppercase tracking-wider text-sm mb-2 flex items-center gap-2 ${color}`}>
-        <TrendingUp className="w-4 h-4" /> {title}
-      </h3>
-      <p className="text-xs text-slate-400 leading-relaxed mb-6 h-10 font-medium opacity-90">{desc}</p>
-      <div className={`text-xs font-bold flex items-center gap-1 uppercase tracking-wider ${color}`}>
-        {action} <ArrowRight className="w-3 h-3" />
+    <div className="flex flex-col gap-1.5 w-full">
+      <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+        {icon} {label}
+      </label>
+      <div className="relative group">
+        <select 
+          value={value} 
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full appearance-none bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-4 py-2.5 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer"
+        >
+          {options.map((opt: any) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-white transition-colors">
+          <ChevronDown className="w-4 h-4" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusCard({ title, color, bg, border, desc, action, icon }: any) {
+  return (
+    <div className={`p-5 rounded-xl border ${border} ${bg} backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-${color}/10 group h-full flex flex-col justify-between`}>
+      <div>
+        <h3 className={`font-bold uppercase tracking-wider text-sm mb-3 flex items-center gap-2 ${color} group-hover:brightness-110 transition-all`}>
+          {icon} {title}
+        </h3>
+        <p className="text-xs text-slate-300 leading-relaxed mb-5 font-medium opacity-90">{desc}</p>
+      </div>
+      <div className={`text-xs font-bold flex items-center gap-1 uppercase tracking-wider ${color} bg-slate-900/50 p-2 rounded-lg w-fit`}>
+        {action} <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
       </div>
     </div>
   )
