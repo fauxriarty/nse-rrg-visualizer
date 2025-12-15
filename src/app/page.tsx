@@ -84,7 +84,7 @@ export default function Home() {
       {/* CONFIGURATION BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
+          <div className="absolute inset-0 bg-linear-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             <div className="flex items-center gap-3 min-w-48">
               <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
@@ -107,8 +107,8 @@ export default function Home() {
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">
         {loading || data.length === 0 ? (
-          <div className="w-full h-96 sm:h-[500px] md:h-[600px] flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+             <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
             <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
             <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Running RRG Algorithm...</p>
             <p className="text-slate-500 text-xs mt-2 relative z-10">Fetching history & calculating relative strength</p>

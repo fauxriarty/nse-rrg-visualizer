@@ -25,17 +25,18 @@ async function fetchWithRetry(symbol: string, options: any, retries = 2): Promis
   for (let i = 0; i < retries; i++) {
     try {
       const res = await yf.chart(symbol, options) as any;
-      // Filter out any quotes that don't have a close price (partial trading days)
       const validQuotes = (res?.quotes || []).filter((q: any) => q.close !== null && q.close !== undefined);
       return validQuotes; 
     } catch (err) {
-      if (i === retries - 1) throw err; 
+      if (i === retries - 1) {
+          console.warn(`Failed to fetch ${symbol}`);
+          return [];
+      } 
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); 
     }
   }
   return [];
 }
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -50,15 +51,9 @@ export async function GET(request: Request) {
     const endDate = new Date();
     const startDate = new Date();
     
-    // --- ROBUST DATA FETCHING ---
-    // Fetch generous buffers to ensure math engine has enough clean data
-    if (interval === '1d') {
-        startDate.setDate(endDate.getDate() - 730); // 2 Years for Daily
-    } else if (interval === '1wk') {
-        startDate.setDate(endDate.getDate() - 1825); // 5 Years for Weekly
-    } else if (interval === '1mo') {
-        startDate.setDate(endDate.getDate() - 3650); // 10 Years for Monthly
-    }
+    if (interval === '1d') startDate.setDate(endDate.getDate() - 730); 
+    else if (interval === '1wk') startDate.setDate(endDate.getDate() - 1825);
+    else if (interval === '1mo') startDate.setDate(endDate.getDate() - 3650);
 
     const queryOptions = { 
       period1: startDate.toISOString().split('T')[0],
@@ -78,18 +73,17 @@ export async function GET(request: Request) {
 
     const results = SECTORS.map((sector, index) => {
         const data = sectorsData[index];
-        if (!data || data.length === 0) return null;
+        if (!data || data.length < 5) return null; 
 
         const closes = data.map((d: any) => d.close);
-        
-        // Pass to robust, null-tolerant math engine
         const fullHistory = calculateRRGData(closes, benchmarkCloses, rsWindow, rocWindow);
 
         if (!fullHistory || fullHistory.length === 0) return null;
 
         return {
           name: sector.name,
-          head: fullHistory[fullHistory.length - 1] 
+          head: fullHistory[fullHistory.length - 1], 
+          tail: fullHistory.slice(-12)
         };
     }).filter(r => r !== null);
 
