@@ -8,7 +8,13 @@ import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 
 interface RRGChartProps {
   data: any[];
-  interval?: string; 
+  interval?: string;
+  config?: {
+    interval: string;
+    rsWindow: number;
+    rocWindow: number;
+    backtestDate?: string;
+  };
 }
 
 const generateSmartTicks = (min: number, max: number) => {
@@ -42,7 +48,7 @@ const ABBREVIATIONS: { [key: string]: string } = {
   'Nifty 500': 'N5',
 };
 
-export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
+export default function RRGChart({ data, interval = '1wk', config }: RRGChartProps) {
   
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -59,6 +65,11 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
     if (interval === '1mo') return 'Months';
     return 'Weeks';
   }, [interval]);
+
+  // Calculate dynamic trail length based on configuration
+  const trailLength = useMemo(() => {
+    return config?.rsWindow || 14;
+  }, [config]);
 
   const chartData = useMemo(() => {
     return data.map((sector, index) => ({
@@ -163,7 +174,7 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
               </span>
-              TRAIL: LAST 12 {intervalName.toUpperCase()}
+              TRAIL: LAST {trailLength} {intervalName.toUpperCase()}
            </div>
         </div>
       </div>

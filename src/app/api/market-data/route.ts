@@ -90,10 +90,13 @@ export async function GET(request: Request) {
 
         if (!fullHistory || fullHistory.length === 0) return null;
 
+        // Show last N positions in the trail based on RS window
+        const trailLength = rsWindow;
+
         return {
           name: sector.name,
           head: fullHistory[fullHistory.length - 1], 
-          tail: fullHistory.slice(-12)
+          tail: fullHistory.slice(-trailLength)
         };
     }).filter(r => r !== null);
 
