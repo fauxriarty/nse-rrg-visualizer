@@ -26,6 +26,22 @@ const generateSmartTicks = (min: number, max: number) => {
   return { domain: [min, max], ticks };
 };
 
+const ABBREVIATIONS: { [key: string]: string } = {
+  'IT': 'IT',
+  'Bank': 'BK',
+  'Auto': 'AU',
+  'Metal': 'MT',
+  'FMCG': 'FM',
+  'Realty': 'RE',
+  'PSU Bank': 'PB',
+  'Energy': 'EN',
+  'Infra': 'IN',
+  'Pharma': 'PH',
+  'Fin Serv': 'FS',
+  'Nifty 200': 'N2',
+  'Nifty 500': 'N5',
+};
+
 export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
   
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
@@ -137,23 +153,6 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
     >
       
       {/* --- 1.  INFO BOX (Hidden unless hovering) --- */}
-      <div className="absolute top-4 left-4 z-20 pointer-events-none">
-         {hoveredSector && activeSectorData && (
-            <div className="bg-slate-900/95 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-2xl text-xs min-w-35 animate-in fade-in zoom-in duration-200">
-              <span className="font-black text-white text-sm block mb-1.5 uppercase tracking-wider border-b border-slate-800 pb-1">{hoveredSector}</span>
-              <div className="space-y-1">
-                <div className="flex justify-between text-slate-400">
-                  <span>Trend:</span> <span className="font-mono font-bold text-emerald-400">{activeSectorData.x.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Mom:</span> <span className="font-mono font-bold text-blue-400">{activeSectorData.y.toFixed(2)}</span>
-                </div>
-              </div>
-            </div>
-         )}
-      </div>
-
-      {/* --- 2. LEGEND (Top Right) --- */}
       <div className="absolute top-4 right-4 z-10 flex flex-col items-end pointer-events-none">
         <div className="text-[10px] text-slate-500 bg-slate-950/80 px-2 py-1 rounded backdrop-blur-sm border border-slate-800/50">
           BENCHMARK: <span className="text-white font-bold">NIFTY 50</span>
@@ -271,9 +270,11 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
               const isHovered = hoveredSector === payload.name;
               const opacity = hoveredSector ? (isHovered ? 1 : 0.1) : 1; 
               
-              const isEven = payload.originalIndex % 2 === 0;
-              const labelXOffset = isEven ? 12 : -12;
-              const textAnchor = isEven ? 'start' : 'end';
+              // Alternate label positions: 0=left, 1=right
+              const isLeft = payload.originalIndex % 2 === 0;
+              const labelXOffset = isLeft ? -25 : 25;
+              const labelYOffset = 4;
+              const textAnchor: 'start' | 'middle' | 'end' = isLeft ? 'end' : 'start';
 
               return (
                 <g 
@@ -286,7 +287,7 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
                       setHoveredSector(null);
                     }
                   }}
-                  onClick={(e) => handlePointClick(e, payload.name)} // Custom handler
+                  onClick={(e) => handlePointClick(e, payload.name)}
                   className="cursor-pointer transition-all duration-300"
                   style={{ opacity }}
                 >
@@ -294,7 +295,7 @@ export default function RRGChart({ data, interval = '1wk' }: RRGChartProps) {
                   <circle cx={cx} cy={cy} r={sizes.pointRadius} fill={isHovered ? "#60a5fa" : "#ffffff"} stroke="#000000" strokeWidth={2} />
                   <text 
                     x={cx + labelXOffset} 
-                    y={cy + 4} 
+                    y={cy + labelYOffset} 
                     textAnchor={textAnchor} 
                     fill={isHovered ? "#60a5fa" : "#e2e8f0"} 
                     fontSize={isHovered ? sizes.labelFontSize + 2 : sizes.labelFontSize} 
