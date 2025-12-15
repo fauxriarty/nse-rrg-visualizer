@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
+import Navigation from '@/components/Navigation';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
@@ -145,20 +146,24 @@ export default function Home() {
           </div>
         </div>
         
-        <div className="flex gap-2 w-full sm:w-auto">
-           {/* Reset Button (Only shows if backtesting) */}
-           {backtestDate && (
-             <button 
-                onClick={() => setBacktestDate('')}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 transition-all border border-slate-700"
-             >
-               Reset to Live
+        <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 w-full sm:w-auto sm:justify-end">
+           <Navigation />
+           
+           <div className="flex gap-2 justify-end">
+             {/* Reset Button (Only shows if backtesting) */}
+             {backtestDate && backtestDate !== new Date().toISOString().split('T')[0] && (
+               <button 
+                  onClick={() => setBacktestDate(new Date().toISOString().split('T')[0])}
+                  className="px-3 sm:px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 transition-all border border-slate-700"
+               >
+                 Reset to Live
+               </button>
+             )}
+             <button onClick={fetchData} disabled={loading} className="flex justify-center items-center gap-2 px-4 sm:px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs sm:text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+               <RefreshCw className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
+               {loading ? 'Calculating...' : 'Update Chart'}
              </button>
-           )}
-           <button onClick={fetchData} disabled={loading} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-             {loading ? 'Calculating...' : 'Update Chart'}
-           </button>
+           </div>
         </div>
       </header>
 
@@ -216,7 +221,7 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <RRGChart data={data} interval={interval} config={config} />
+          <RRGChart data={data} interval={interval} config={config} enableSectorNavigation={true} />
         )}
       </div>
 

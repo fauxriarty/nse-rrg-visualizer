@@ -4,7 +4,9 @@ import {
   ComposedChart, Scatter, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ReferenceArea, Label, LabelList
 } from 'recharts';
 import { useMemo, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { SECTOR_INDICES } from '@/lib/sectorConfig';
 
 interface RRGChartProps {
   data: any[];
@@ -15,6 +17,8 @@ interface RRGChartProps {
     rocWindow: number;
     backtestDate?: string;
   };
+  benchmark?: string; // Optional benchmark name (defaults to NIFTY 50)
+  enableSectorNavigation?: boolean; // Enable clicking sectors to navigate
 }
 
 const generateSmartTicks = (min: number, max: number) => {
@@ -51,8 +55,9 @@ const ABBREVIATIONS: { [key: string]: string } = {
   'Nifty 500': 'N5',
 };
 
-export default function RRGChart({ data, interval = '1wk', config }: RRGChartProps) {
+export default function RRGChart({ data, interval = '1wk', config, benchmark = 'NIFTY 50', enableSectorNavigation = true }: RRGChartProps) {
   
+  const router = useRouter();
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
 
@@ -155,6 +160,14 @@ export default function RRGChart({ data, interval = '1wk', config }: RRGChartPro
   const handlePointClick = (e: any, sectorName: string) => {
     e.stopPropagation(); // Stop the background click from immediately clearing this
     setHoveredSector(sectorName);
+    
+    // Navigate to sector analysis if enabled and it's a known sector
+    if (enableSectorNavigation) {
+      const sectorInfo = SECTOR_INDICES.find(s => s.name === sectorName);
+      if (sectorInfo) {
+        router.push(`/sectors?sector=${sectorInfo.symbol}`);
+      }
+    }
   };
 
   return (
@@ -169,7 +182,7 @@ export default function RRGChart({ data, interval = '1wk', config }: RRGChartPro
       {/* --- 1.  INFO BOX (Hidden unless hovering) --- */}
       <div className="absolute top-4 right-4 z-10 flex flex-col items-end pointer-events-none">
         <div className="text-[10px] text-slate-500 bg-slate-950/80 px-2 py-1 rounded backdrop-blur-sm border border-slate-800/50">
-          BENCHMARK: <span className="text-white font-bold">NIFTY 50</span>
+          BENCHMARK: <span className="text-white font-bold">{benchmark}</span>
         </div>
         <div className={`mt-1 transition-all duration-300 ${hoveredSector ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
            <div className="text-[10px] font-bold text-blue-400 bg-blue-950/40 px-2 py-1 rounded border border-blue-500/20 flex items-center gap-2">
@@ -222,17 +235,17 @@ export default function RRGChart({ data, interval = '1wk', config }: RRGChartPro
           </defs>
 
           {/* QUADRANTS */}
-          <ReferenceArea x1={domainX[0]} x2={100} y1={100} y2={domainY[1]} fill="#1e3a8a" fillOpacity={hoveredSector ? 0.05 : 0.3}>
-            <Label value="IMPROVING" position="center" fill="rgba(59, 130, 246, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} />
+          <ReferenceArea x1={domainX[0]} x2={100} y1={100} y2={domainY[1]} fill="#1e3a8a" fillOpacity={hoveredSector ? 0.05 : 0.3} style={{ pointerEvents: 'none' }}>
+            <Label value="IMPROVING" position="center" fill="rgba(59, 130, 246, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} style={{ pointerEvents: 'none' }} />
           </ReferenceArea>
-          <ReferenceArea x1={100} x2={domainX[1]} y1={100} y2={domainY[1]} fill="#064e3b" fillOpacity={hoveredSector ? 0.05 : 0.3}>
-            <Label value="LEADING" position="center" fill="rgba(16, 185, 129, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} />
+          <ReferenceArea x1={100} x2={domainX[1]} y1={100} y2={domainY[1]} fill="#064e3b" fillOpacity={hoveredSector ? 0.05 : 0.3} style={{ pointerEvents: 'none' }}>
+            <Label value="LEADING" position="center" fill="rgba(16, 185, 129, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} style={{ pointerEvents: 'none' }} />
           </ReferenceArea>
-          <ReferenceArea x1={domainX[0]} x2={100} y1={domainY[0]} y2={100} fill="#7f1d1d" fillOpacity={hoveredSector ? 0.05 : 0.3}>
-            <Label value="LAGGING" position="center" fill="rgba(239, 68, 68, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} />
+          <ReferenceArea x1={domainX[0]} x2={100} y1={domainY[0]} y2={100} fill="#7f1d1d" fillOpacity={hoveredSector ? 0.05 : 0.3} style={{ pointerEvents: 'none' }}>
+            <Label value="LAGGING" position="center" fill="rgba(239, 68, 68, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} style={{ pointerEvents: 'none' }} />
           </ReferenceArea>
-          <ReferenceArea x1={100} x2={domainX[1]} y1={domainY[0]} y2={100} fill="#78350f" fillOpacity={hoveredSector ? 0.05 : 0.3}>
-            <Label value="WEAKENING" position="center" fill="rgba(245, 158, 11, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} />
+          <ReferenceArea x1={100} x2={domainX[1]} y1={domainY[0]} y2={100} fill="#78350f" fillOpacity={hoveredSector ? 0.05 : 0.3} style={{ pointerEvents: 'none' }}>
+            <Label value="WEAKENING" position="center" fill="rgba(245, 158, 11, 0.4)" fontSize={sizes.quadrantFontSize} fontWeight={900} style={{ pointerEvents: 'none' }} />
           </ReferenceArea>
 
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
