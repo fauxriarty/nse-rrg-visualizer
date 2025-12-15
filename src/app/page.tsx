@@ -5,7 +5,7 @@ import RRGChart from '@/components/RRGChart';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
-  BookOpen, Calculator, Database, Server, Sigma, LineChart
+  BookOpen, Calculator, Database, Server, Sigma, History
 } from 'lucide-react';
 
 // --- CONSTANTS ---
@@ -19,10 +19,13 @@ export default function Home() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Default: Weekly, 14 RS, 1 ROC (Standard RRG)
+  // Configuration State
   const [interval, setIntervalState] = useState('1wk');
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('1');
+  
+  // --- NEW: BACKTESTING STATE ---
+  const [backtestDate, setBacktestDate] = useState(''); // Empty string = Live Data
 
   // --- DYNAMIC OPTIONS ---
   const rsOptions = useMemo(() => {
@@ -48,6 +51,12 @@ export default function Home() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ interval, rsWindow, rocWindow });
+      
+      // --- APPEND DATE IF BACKTESTING ---
+      if (backtestDate) {
+        params.append('date', backtestDate);
+      }
+
       const res = await fetch(`/api/market-data?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch data');
       const json = await res.json();
@@ -57,7 +66,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [interval, rsWindow, rocWindow]);
+  }, [interval, rsWindow, rocWindow, backtestDate]); // Trigger fetch when date changes
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -75,16 +84,29 @@ export default function Home() {
             <p className="text-slate-400 text-xs sm:text-sm font-medium">Relative Strength & Momentum Visualizer</p>
           </div>
         </div>
-        <button onClick={fetchData} disabled={loading} className="w-full sm:w-auto flex justify-center items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Calculating...' : 'Update Chart'}
-        </button>
+        
+        <div className="flex gap-2 w-full sm:w-auto">
+           {/* Reset Button (Only shows if backtesting) */}
+           {backtestDate && (
+             <button 
+                onClick={() => setBacktestDate('')}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 transition-all border border-slate-700"
+             >
+               Reset to Live
+             </button>
+           )}
+           <button onClick={fetchData} disabled={loading} className="flex-1 sm:flex-none flex justify-center items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+             {loading ? 'Calculating...' : 'Update Chart'}
+           </button>
+        </div>
       </header>
 
       {/* CONFIGURATION BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-linear-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
+          
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
             <div className="flex items-center gap-3 min-w-48">
               <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
@@ -95,7 +117,25 @@ export default function Home() {
                 <p className="text-xs text-slate-500">Adjust math parameters</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full lg:w-auto">
+            
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 w-full lg:w-auto">
+              
+              {/* --- NEW: BACKTESTING DATE PICKER --- */}
+              <div className="flex flex-col gap-1.5 w-full">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                  <History className="w-3.5 h-3.5" /> Backtest Date
+                </label>
+                <div className="relative group">
+                  <input 
+                    type="date" 
+                    max={new Date().toISOString().split("T")[0]} // Limit to today
+                    value={backtestDate} 
+                    onChange={(e) => setBacktestDate(e.target.value)}
+                    className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer"
+                  />
+                </div>
+              </div>
+
               <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
               <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
               <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
@@ -107,18 +147,22 @@ export default function Home() {
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">
         {loading || data.length === 0 ? (
-          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-             <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
+          <div className="w-full h-96 sm:h-[500px] md:h-[600px] flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
             <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
             <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Running RRG Algorithm...</p>
-            <p className="text-slate-500 text-xs mt-2 relative z-10">Fetching history & calculating relative strength</p>
+            <p className="text-slate-500 text-xs mt-2 relative z-10">
+                {backtestDate ? `Fetching history for ${backtestDate}` : 'Fetching live market data'}
+            </p>
           </div>
         ) : (
           <RRGChart data={data} />
         )}
       </div>
 
-      {/* --- 3-COLUMN INFO GRID --- */}
+      {/* ... (Rest of your Info Grid and Footer remains unchanged) ... */}
+      
+      {/* --- 3-COLUMN INFO GRID (Included for completeness) --- */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
         
         {/* 1. DATA ARCHITECTURE */}
@@ -217,8 +261,7 @@ export default function Home() {
 
       </div>
 
-      {/* FOOTER */}
-       <div className="max-w-7xl mx-auto border-t border-slate-800 pt-8 text-slate-500 text-xs sm:text-sm flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="max-w-7xl mx-auto border-t border-slate-800 pt-8 text-slate-500 text-xs sm:text-sm flex flex-col sm:flex-row justify-between items-center gap-4">
          <p className="flex items-center gap-2">
            <Info className="w-4 h-4" />
            <span>Benchmark: <strong>Nifty 50</strong> (^NSEI)</span>
@@ -256,20 +299,4 @@ function CustomSelect({ label, icon, value, onChange, options }: any) {
       </div>
     </div>
   );
-}
-
-function StatusCard({ title, color, bg, border, desc, action, icon }: any) {
-  return (
-    <div className={`p-5 rounded-xl border ${border} ${bg} backdrop-blur-sm transition-all hover:-translate-y-1 hover:shadow-lg hover:shadow-${color}/10 group h-full flex flex-col justify-between`}>
-      <div>
-        <h3 className={`font-bold uppercase tracking-wider text-sm mb-3 flex items-center gap-2 ${color} group-hover:brightness-110 transition-all`}>
-          {icon} {title}
-        </h3>
-        <p className="text-xs text-slate-300 leading-relaxed mb-5 font-medium opacity-90">{desc}</p>
-      </div>
-      <div className={`text-xs font-bold flex items-center gap-1 uppercase tracking-wider ${color} bg-slate-900/50 p-2 rounded-lg w-fit`}>
-        {action} <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-      </div>
-    </div>
-  )
 }
