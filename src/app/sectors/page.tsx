@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RRGChart from '@/components/RRGChart';
 import Navigation from '@/components/Navigation';
@@ -16,7 +16,7 @@ const INTERVAL_OPTIONS = [
   { label: 'Monthly', value: '1mo' },
 ];
 
-export default function SectorsPage() {
+function SectorsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -287,5 +287,20 @@ function CustomSelect({ label, icon, value, onChange, options, isDate = false }:
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SectorsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+          <p className="text-slate-400">Loading sector analysis...</p>
+        </div>
+      </div>
+    }>
+      <SectorsPageContent />
+    </Suspense>
   );
 }
