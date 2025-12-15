@@ -21,24 +21,82 @@ export default function Home() {
   const [config, setConfig] = useState<any>(null);
 
   // Configuration State
-  const [interval, setIntervalState] = useState('1wk');
+  const [interval, setIntervalState] = useState('1d');
   const [rsWindow, setRsWindow] = useState('14');
-  const [rocWindow, setRocWindow] = useState('1');
+  const [rocWindow, setRocWindow] = useState('14');
   
   // --- NEW: BACKTESTING STATE ---
-  const [backtestDate, setBacktestDate] = useState(''); // Empty string = Live Data
+  const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]); // Default to today's date
 
   // --- DYNAMIC OPTIONS ---
   const rsOptions = useMemo(() => {
-    const opts = [{ label: '10 Bars', value: 10 }, { label: '14 Bars (Std)', value: 14 }];
-    if (interval === '1mo') return [{ label: '6 Bars', value: 6 }, ...opts];
-    return [...opts, { label: '20 Bars', value: 20 }, { label: '28 Bars', value: 28 }, { label: '50 Bars', value: 50 }];
+    if (interval === '1mo') {
+      // Monthly: Limited options
+      return [
+        { label: '6 Bars', value: 6 },
+        { label: '10 Bars', value: 10 },
+        { label: '14 Bars (Std)', value: 14 },
+        { label: '20 Bars', value: 20 }
+      ];
+    }
+    if (interval === '1d') {
+      // Daily: Most options available (2 years = ~500 trading days)
+      return [
+        { label: '10 Bars', value: 10 },
+        { label: '14 Bars (Std)', value: 14 },
+        { label: '20 Bars', value: 20 },
+        { label: '28 Bars', value: 28 },
+        { label: '50 Bars', value: 50 },
+        { label: '100 Bars', value: 100 },
+        { label: '200 Bars', value: 200 }
+      ];
+    }
+    // Weekly: Good range (5 years = ~260 weeks)
+    return [
+      { label: '10 Bars', value: 10 },
+      { label: '14 Bars (Std)', value: 14 },
+      { label: '20 Bars', value: 20 },
+      { label: '28 Bars', value: 28 },
+      { label: '50 Bars', value: 50 },
+      { label: '100 Bars', value: 100 }
+    ];
   }, [interval]);
 
   const rocOptions = useMemo(() => {
-    const fastOpts = [{ label: '1 Bar (Fast)', value: 1 }, { label: '3 Bars', value: 3 }];
-    if (interval === '1mo') return fastOpts;
-    return [...fastOpts, { label: '5 Bars', value: 5 }, { label: '10 Bars', value: 10 }, { label: '12 Bars', value: 12 }, { label: '14 Bars', value: 14 }];
+    if (interval === '1mo') {
+      // Monthly: Limited options due to less historical data
+      return [
+        { label: '1 Bar (Fast)', value: 1 },
+        { label: '3 Bars', value: 3 },
+        { label: '6 Bars', value: 6 }
+      ];
+    }
+    if (interval === '1d') {
+      // Daily: Most options available (2 years = ~500 trading days)
+      return [
+        { label: '1 Bar (Fast)', value: 1 },
+        { label: '3 Bars', value: 3 },
+        { label: '5 Bars', value: 5 },
+        { label: '10 Bars', value: 10 },
+        { label: '14 Bars (Std)', value: 14 },
+        { label: '20 Bars', value: 20 },
+        { label: '28 Bars', value: 28 },
+        { label: '50 Bars', value: 50 },
+        { label: '100 Bars', value: 100 },
+        { label: '200 Bars', value: 200 }
+      ];
+    }
+    // Weekly: Good range of options (5 years = ~260 weeks)
+    return [
+      { label: '1 Bar (Fast)', value: 1 },
+      { label: '3 Bars', value: 3 },
+      { label: '5 Bars', value: 5 },
+      { label: '10 Bars', value: 10 },
+      { label: '14 Bars (Std)', value: 14 },
+      { label: '20 Bars', value: 20 },
+      { label: '28 Bars', value: 28 },
+      { label: '50 Bars', value: 50 }
+    ];
   }, [interval]);
 
   useEffect(() => {
@@ -162,7 +220,69 @@ export default function Home() {
         )}
       </div>
 
-      {/* ... (Rest of your Info Grid and Footer remains unchanged) ... */}
+      {/* --- UNDERSTANDING CONFIGURATION PARAMETERS --- */}
+      <div className="max-w-7xl mx-auto mb-8">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors">
+          <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
+            <div className="p-2 bg-indigo-500/10 rounded-lg"><Sigma className="w-5 h-5 text-indigo-500" /></div>
+            <h2 className="text-lg font-bold text-white">Understanding Configuration Parameters</h2>
+          </div>
+          
+          <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+            The settings for <strong>RS</strong> (Relative Strength) and <strong>ROC</strong> (Rate of Change) periods control the <em>sensitivity</em> and <em>time horizon</em> of your analysis. Changing them allows you to switch between being a day trader (who cares about what happened recently) and a long-term investor (who cares about the last year).
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* RS Period Explanation */}
+            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800/50">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-blue-500/20 rounded"><ArrowRight className="w-4 h-4 text-blue-400" /></div>
+                <h3 className="text-sm font-bold text-blue-300">RS Period (The "Trend" / X-Axis)</h3>
+              </div>
+              <p className="text-xs text-slate-400 mb-3 italic">Measures Direction: "Is this sector beating the market?"</p>
+              
+              <div className="space-y-3">
+                <div className="bg-slate-900/50 p-2.5 rounded border border-slate-700/30">
+                  <div className="text-[10px] font-bold text-emerald-400 mb-1">LOW VALUE (e.g., 10 bars)</div>
+                  <div className="text-[10px] text-slate-400 mb-1"><strong>Effect:</strong> Very sensitive. Reacts quickly to recent price action.</div>
+                  <div className="text-[10px] text-slate-300"><strong>Use Case:</strong> Swing Trading. Catch new trends early, even with noise.</div>
+                </div>
+                
+                <div className="bg-slate-900/50 p-2.5 rounded border border-slate-700/30">
+                  <div className="text-[10px] font-bold text-purple-400 mb-1">HIGH VALUE (e.g., 28 or 50 bars)</div>
+                  <div className="text-[10px] text-slate-400 mb-1"><strong>Effect:</strong> Very smooth. Requires sustained moves to shift position.</div>
+                  <div className="text-[10px] text-slate-300"><strong>Use Case:</strong> Long-Term Investing. Ignore daily noise, see major shifts.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* ROC Period Explanation */}
+            <div className="bg-slate-950 p-4 rounded-lg border border-slate-800/50">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-amber-500/20 rounded"><TrendingUp className="w-4 h-4 text-amber-400" /></div>
+                <h3 className="text-sm font-bold text-amber-300">ROC Period (The "Momentum" / Y-Axis)</h3>
+              </div>
+              <p className="text-xs text-slate-400 mb-3 italic">Measures Speed/Acceleration: "Is this sector speeding up or slowing down?"</p>
+              
+              <div className="space-y-3">
+                <div className="bg-slate-900/50 p-2.5 rounded border border-slate-700/30">
+                  <div className="text-[10px] font-bold text-emerald-400 mb-1">LOW VALUE (e.g., 1 bar)</div>
+                  <div className="text-[10px] text-slate-400 mb-1"><strong>Effect:</strong> Extremely volatile. Measures day-to-day changes.</div>
+                  <div className="text-[10px] text-slate-300"><strong>Use Case:</strong> Precision Timing. Spot exact moments when trends pause.</div>
+                </div>
+                
+                <div className="bg-slate-900/50 p-2.5 rounded border border-slate-700/30">
+                  <div className="text-[10px] font-bold text-purple-400 mb-1">HIGH VALUE (e.g., 12 or 14 bars)</div>
+                  <div className="text-[10px] text-slate-400 mb-1"><strong>Effect:</strong> Smoother momentum over longer windows.</div>
+                  <div className="text-[10px] text-slate-300"><strong>Use Case:</strong> Trend Strength. Confirm sustained power, not one-day pops.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
       
       {/* --- 3-COLUMN INFO GRID (Included for completeness) --- */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">

@@ -19,16 +19,19 @@ interface RRGChartProps {
 
 const generateSmartTicks = (min: number, max: number) => {
   const range = max - min;
-  const rawStep = range / 8; 
+  const targetTicks = 5; // Target 5 ticks for clean grid
+  const rawStep = range / targetTicks; 
+  
+  // Choose nice step sizes
   const niceSteps = [0.5, 1, 2, 5, 10, 20, 50, 100];
-  let step = niceSteps.find(s => s >= rawStep) || rawStep;
-  if (rawStep > 100) step = 100;
+  let step = niceSteps.find(s => s >= rawStep) || Math.ceil(rawStep);
 
   const ticks = [];
-  let start = Math.floor(min / step) * step;
+  let start = Math.ceil(min / step) * step;
   for (let i = start; i <= max; i += step) {
-    if (i >= min && i <= max) ticks.push(parseFloat(i.toFixed(1)));
+    ticks.push(parseFloat(i.toFixed(1)));
   }
+  
   return { domain: [min, max], ticks };
 };
 
@@ -115,9 +118,9 @@ export default function RRGChart({ data, interval = '1wk', config }: RRGChartPro
     const bufferX = Math.ceil(maxDiffX * 1.1) + 1;
     const bufferY = Math.ceil(maxDiffY * 1.1) + 1;
 
-    // Apply Zoom
-    const effectiveBufferX = Math.max(1, bufferX / zoomLevel);
-    const effectiveBufferY = Math.max(1, bufferY / zoomLevel);
+    // Apply Zoom with minimum constraints to prevent chart shrinking
+    const effectiveBufferX = Math.max(5, bufferX / zoomLevel);
+    const effectiveBufferY = Math.max(5, bufferY / zoomLevel);
 
     const minX = 100 - effectiveBufferX;
     const maxX = 100 + effectiveBufferX;
