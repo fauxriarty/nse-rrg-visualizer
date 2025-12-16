@@ -1,0 +1,24 @@
+============================================================
+NSE STOCK FETCHER - SUMMARY REPORT
+============================================================
+Generated: 2025-12-16T15:48:26.878Z
+
+Total stocks processed: 2212
+Total sectors found: 11
+Failed stocks: 6
+
+============================================================
+STOCKS PER SECTOR
+============================================================
+
+Industrials                               456 stocks
+Consumer Cyclical                         428 stocks
+Basic Materials                           364 stocks
+Financial Services                        232 stocks
+Technology                                179 stocks
+Consumer Defensive                        159 stocks
+Healthcare                                158 stocks
+Real Estate                                83 stocks
+Communication Services                     75 stocks
+Utilities                                  41 stocks
+Energy                                     37 stocks
