@@ -6,8 +6,9 @@ import Navigation from '@/components/Navigation';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
-  BookOpen, Calculator, Database, Server, Sigma, History
+  BookOpen, Calculator, Database, Server, Sigma, History, X
 } from 'lucide-react';
+import { SECTOR_INDICES } from '@/lib/sectorConfig';
 
 // --- CONSTANTS ---
 const INTERVAL_OPTIONS = [
@@ -25,9 +26,9 @@ export default function Home() {
   const [interval, setIntervalState] = useState('1d');
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
-  
-  // --- NEW: BACKTESTING STATE ---
-  const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]); // Default to today's date
+  const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedSectors, setSelectedSectors] = useState<Set<string>>(new Set(SECTOR_INDICES.map(s => s.name)));
+  const [showSectorDropdown, setShowSectorDropdown] = useState(false);
 
   // --- DYNAMIC OPTIONS ---
   const rsOptions = useMemo(() => {
@@ -164,8 +165,8 @@ export default function Home() {
       </header>
 
       {/* CONFIGURATION BAR */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+      <div className="max-w-7xl mx-auto mb-8 relative z-40">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-visible">
           <div className="absolute inset-0 bg-linear-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
           
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
@@ -179,9 +180,46 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 w-full lg:w-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 w-full lg:w-auto">
               
-              {/* --- NEW: BACKTESTING DATE PICKER --- */}
+              {/* SECTOR MULTISELECT */}
+              <div className="flex flex-col gap-1.5 w-full relative">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" /> Sectors
+                </label>
+                <button
+                  onClick={() => setShowSectorDropdown(!showSectorDropdown)}
+                  className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
+                >
+                  <span className="text-xs">{selectedSectors.size} of {SECTOR_INDICES.length}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showSectorDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showSectorDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto" style={{ zIndex: 999 }}>
+                    {SECTOR_INDICES.map(sector => (
+                      <label key={sector.name} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedSectors.has(sector.name)}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedSectors);
+                            if (e.target.checked) {
+                              newSelected.add(sector.name);
+                            } else {
+                              newSelected.delete(sector.name);
+                            }
+                            setSelectedSectors(newSelected);
+                          }}
+                          className="w-4 h-4 rounded border-slate-600 accent-blue-600 cursor-pointer"
+                        />
+                        <span className="text-xs text-slate-300">{sector.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* --- BACKTESTING DATE PICKER --- */}
               <div className="flex flex-col gap-1.5 w-full">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
                   <History className="w-3.5 h-3.5" /> Backtest Date
@@ -217,7 +255,7 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <RRGChart data={data} interval={interval} config={config} enableSectorNavigation={true} />
+          <RRGChart data={data} interval={interval} config={config} enableSectorNavigation={true} selectedSectorNames={selectedSectors} />
         )}
       </div>
 

@@ -18,6 +18,7 @@ const SECTORS = [
   { symbol: '^CNXINFRA', name: 'Infra' }, 
   { symbol: '^CNXPHARMA', name: 'Pharma' },
   { symbol: 'NIFTY_FIN_SERVICE.NS', name: 'Fin Serv' },
+  { symbol: '^NSMIDCP', name: 'Next 50' },
   { symbol: '^CNX200', name: 'Nifty 200' },
   { symbol: '^CRSLDX', name: 'Nifty 500' },
 ];

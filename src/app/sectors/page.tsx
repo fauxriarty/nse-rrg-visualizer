@@ -208,7 +208,7 @@ function SectorsPageContent() {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 w-full lg:w-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 w-full lg:w-auto">
               <CustomSelect 
                 label="Select Sector" 
                 icon={<TrendingUp className="w-3.5 h-3.5" />} 
@@ -219,40 +219,37 @@ function SectorsPageContent() {
               <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
               <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
               <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+              <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
               
               {/* Benchmark Toggle */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Benchmark</label>
-                <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1 h-10">
+                <div className="w-full flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-1.5 h-11">
                   <button
                     onClick={() => setBenchmark('sector')}
-                    className={`px-2.5 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
                       benchmark === 'sector'
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    vs {sectorName}
+                    Sector
                   </button>
-                  <div className="w-px h-4 bg-slate-600"></div>
+                  <div className="w-px h-3 bg-slate-600"></div>
                   <button
                     onClick={() => setBenchmark('nifty')}
-                    className={`px-2.5 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
+                    className={`pl-3 ${
                       benchmark === 'nifty'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
+                        ? 'pr-1.5 bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                        : 'pr-1.5 text-slate-400 hover:text-slate-200'
+                    } py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap`}
                   >
-                    vs NIFTY 50
+                    NIFTY50
                   </button>
                 </div>
               </div>
             </div>
-            
-            {/* ROC Period - Split to next row */}
-            <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 w-full lg:w-auto">
-              <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
-            </div>
+
           </div>
         </div>
       </div>

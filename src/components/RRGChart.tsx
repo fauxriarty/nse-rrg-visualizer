@@ -19,16 +19,19 @@ interface RRGChartProps {
   };
   benchmark?: string; // Optional benchmark name (defaults to NIFTY 50)
   enableSectorNavigation?: boolean; // Enable clicking sectors to navigate
+  selectedSectorNames?: Set<string>; // Filter which sectors to display (optional)
 }
 
-const generateSmartTicks = (min: number, max: number) => {
+const generateSmartTicks = (min: number, max: number, zoomLevel: number = 1) => {
   const range = max - min;
   const targetTicks = 5; // Target 5 ticks for clean grid
   const rawStep = range / targetTicks; 
   
-  // Choose nice step sizes
+  // Choose nice step sizes; multiply by zoom to space ticks further when zoomed in
   const niceSteps = [0.5, 1, 2, 5, 10, 20, 50, 100];
-  let step = niceSteps.find(s => s >= rawStep) || Math.ceil(rawStep);
+  const zoomMultiplier = Math.max(1, Math.ceil(zoomLevel * 0.4));
+  const adjustedNiceSteps = niceSteps.map(s => s * zoomMultiplier);
+  let step = adjustedNiceSteps.find(s => s >= rawStep) || Math.ceil(rawStep);
 
   const ticks = [];
   let start = Math.ceil(min / step) * step;
@@ -55,11 +58,17 @@ const ABBREVIATIONS: { [key: string]: string } = {
   'Nifty 500': 'N5',
 };
 
-export default function RRGChart({ data, interval = '1wk', config, benchmark = 'NIFTY 50', enableSectorNavigation = true }: RRGChartProps) {
+export default function RRGChart({ data, interval = '1wk', config, benchmark = 'NIFTY 50', enableSectorNavigation = true, selectedSectorNames }: RRGChartProps) {
   
   const router = useRouter();
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+
+  // Filter data for rendering if selectedSectorNames is provided
+  const displayData = useMemo(() => {
+    if (!selectedSectorNames) return data;
+    return data.filter(s => selectedSectorNames.has(s.name));
+  }, [data, selectedSectorNames]);
 
   // Get data for the manual tooltip box
   const activeSectorData = useMemo(() => {
@@ -80,14 +89,14 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
   }, [config]);
 
   const chartData = useMemo(() => {
-    return data.map((sector, index) => ({
+    return displayData.map((sector, index) => ({
       x: sector.head.x,
       y: sector.head.y,
       name: sector.name,
       tail: sector.tail, 
       originalIndex: index, 
     }));
-  }, [data]);
+  }, [displayData]);
 
   const trailData = useMemo(() => {
     if (!hoveredSector) return [];
@@ -102,38 +111,51 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
 
   // SCALING & ZOOM LOGIC
   const { domainX, ticksX, domainY, ticksY } = useMemo(() => {
-    let maxDiffX = 0;
-    let maxDiffY = 0;
+    // Track actual min/max across all points (heads + trails)
+    let actualMinX = Infinity, actualMaxX = -Infinity;
+    let actualMinY = Infinity, actualMaxY = -Infinity;
 
     if (data && data.length > 0) {
       data.forEach(item => {
-        maxDiffX = Math.max(maxDiffX, Math.abs(item.head.x - 100));
-        maxDiffY = Math.max(maxDiffY, Math.abs(item.head.y - 100));
-        if(item.tail) {
+        actualMinX = Math.min(actualMinX, item.head.x);
+        actualMaxX = Math.max(actualMaxX, item.head.x);
+        actualMinY = Math.min(actualMinY, item.head.y);
+        actualMaxY = Math.max(actualMaxY, item.head.y);
+
+        if (item.tail) {
           item.tail.forEach((t: any) => {
-             maxDiffX = Math.max(maxDiffX, Math.abs(t.x - 100));
-             maxDiffY = Math.max(maxDiffY, Math.abs(t.y - 100));
+            actualMinX = Math.min(actualMinX, t.x);
+            actualMaxX = Math.max(actualMaxX, t.x);
+            actualMinY = Math.min(actualMinY, t.y);
+            actualMaxY = Math.max(actualMaxY, t.y);
           });
         }
       });
     } else {
-      maxDiffX = 2; maxDiffY = 2;
+      actualMinX = 98; actualMaxX = 102;
+      actualMinY = 98; actualMaxY = 102;
     }
 
-    const bufferX = Math.ceil(maxDiffX * 1.1) + 1;
-    const bufferY = Math.ceil(maxDiffY * 1.1) + 1;
+    // Required half-range to include all points w.r.t. 100 axes
+    const reqHalfRangeX = Math.max(100 - actualMinX, actualMaxX - 100);
+    const reqHalfRangeY = Math.max(100 - actualMinY, actualMaxY - 100);
+    const reqHalfRange = Math.max(reqHalfRangeX, reqHalfRangeY);
 
-    // Apply Zoom with minimum constraints to prevent chart shrinking
-    const effectiveBufferX = Math.max(5, bufferX / zoomLevel);
-    const effectiveBufferY = Math.max(5, bufferY / zoomLevel);
+    // Base half-range with safety margin
+    const epsilon = 0.6;
+    const baseHalfRange = Math.ceil(reqHalfRange * 1.08) + 1;
+    
+    // Zoom reduces the half-range; always keep at least epsilon above required
+    const zoomedHalfRange = baseHalfRange / zoomLevel;
+    const effectiveHalfRange = Math.max(reqHalfRange + epsilon, zoomedHalfRange);
 
-    const minX = 100 - effectiveBufferX;
-    const maxX = 100 + effectiveBufferX;
-    const minY = 100 - effectiveBufferY;
-    const maxY = 100 + effectiveBufferY;
+    const minX = 100 - effectiveHalfRange;
+    const maxX = 100 + effectiveHalfRange;
+    const minY = 100 - effectiveHalfRange;
+    const maxY = 100 + effectiveHalfRange;
 
-    const xData = generateSmartTicks(minX, maxX);
-    const yData = generateSmartTicks(minY, maxY);
+    const xData = generateSmartTicks(minX, maxX, zoomLevel);
+    const yData = generateSmartTicks(minY, maxY, zoomLevel);
 
     return { domainX: xData.domain, ticksX: xData.ticks, domainY: yData.domain, ticksY: yData.ticks };
   }, [data, zoomLevel]);
@@ -151,6 +173,19 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Reduce chart margins as we zoom in so the grid fills more of the box
+  const chartMargin = useMemo(() => {
+    const base = { top: 24, right: 20, bottom: 42, left: 44 };
+    const scale = Math.min(3, Math.max(1, zoomLevel));
+    return {
+      // Keep safe minimums to prevent Y overflow/clipping on ticks and quadrant labels
+      top: Math.max(18, Math.round(base.top / scale)),
+      right: Math.max(10, Math.round(base.right / scale)),
+      bottom: Math.max(28, Math.round(base.bottom / scale)),
+      left: Math.max(24, Math.round(base.left / scale)),
+    };
+  }, [zoomLevel]);
 
   // --- HANDLERS ---
   const handleBackgroundClick = () => {
@@ -180,11 +215,18 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
     >
       
       {/* --- 1.  INFO BOX (Hidden unless hovering) --- */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col items-end pointer-events-none">
+      <div className="absolute top-4 right-4 z-10 flex flex-col items-end pointer-events-none gap-2">
         <div className="text-[10px] text-slate-500 bg-slate-950/80 px-2 py-1 rounded backdrop-blur-sm border border-slate-800/50">
           BENCHMARK: <span className="text-white font-bold">{benchmark}</span>
         </div>
-        <div className={`mt-1 transition-all duration-300 ${hoveredSector ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
+        {hoveredSector && activeSectorData && (
+          <div className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 px-2 py-1 rounded border border-emerald-500/20">
+            <div>{hoveredSector}</div>
+            <div>RS: {activeSectorData.x.toFixed(2)}</div>
+            <div>ROC: {activeSectorData.y.toFixed(2)}</div>
+          </div>
+        )}
+        <div className={`transition-all duration-300 ${hoveredSector ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}>
            <div className="text-[10px] font-bold text-blue-400 bg-blue-950/40 px-2 py-1 rounded border border-blue-500/20 flex items-center gap-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -225,7 +267,7 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
 
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart 
-          margin={{ top: 20, right: 20, bottom: 40, left: 40 }}
+          margin={chartMargin}
           onMouseLeave={() => setHoveredSector(null)}
         >
           <defs>
