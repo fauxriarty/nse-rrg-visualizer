@@ -2,16 +2,23 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, TrendingUp } from 'lucide-react';
+import { BarChart3, TrendingUp, RefreshCw } from 'lucide-react';
 
-export default function Navigation() {
+type Props = {
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  showRefresh?: boolean;
+  className?: string;
+};
+
+export default function Navigation({ onRefresh, refreshing = false, showRefresh = true, className = '' }: Props) {
   const pathname = usePathname();
   
   const isMarketView = pathname === '/';
   const isSectorView = pathname.startsWith('/sectors');
   
   return (
-    <nav className="flex items-center gap-2 flex-wrap justify-center">
+    <nav className={`flex items-center gap-2 flex-wrap justify-center w-full sm:w-auto ${className}`}>
       <Link 
         href="/"
         className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
@@ -37,6 +44,21 @@ export default function Navigation() {
         <span className="hidden xs:inline">Sector Analysis</span>
         <span className="xs:hidden">Sectors</span>
       </Link>
+
+      {showRefresh && (
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={!onRefresh || refreshing}
+          title="Update Chart"
+          className={`inline-flex justify-center items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+            refreshing ? 'bg-blue-600 text-white shadow-blue-900/20' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
+          }`}
+        >
+          <RefreshCw className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${refreshing ? 'animate-spin' : ''}`} />
+          <span className="hidden xs:inline">Update Chart</span>
+        </button>
+      )}
     </nav>
   );
 }

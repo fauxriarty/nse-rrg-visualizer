@@ -33,6 +33,7 @@ function SectorsPageContent() {
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
+  const [benchmark, setBenchmark] = useState<'sector' | 'nifty'>('sector'); // 'sector' or 'nifty'
 
   // Initialize sector name when selected sector changes
   useEffect(() => {
@@ -121,7 +122,8 @@ function SectorsPageContent() {
         sector: selectedSector,
         interval, 
         rsWindow, 
-        rocWindow 
+        rocWindow,
+        benchmark
       });
       
       if (backtestDate) {
@@ -144,7 +146,7 @@ function SectorsPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [selectedSector, interval, rsWindow, rocWindow, backtestDate]);
+  }, [selectedSector, interval, rsWindow, rocWindow, backtestDate, benchmark]);
 
   useEffect(() => { 
     fetchData(); 
@@ -176,9 +178,9 @@ function SectorsPageContent() {
           </div>
         </div>
         
-        <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 w-full sm:w-auto sm:justify-end">
-           <Navigation />
-           
+        <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 w-full sm:w-auto sm:justify-end mt-2 sm:mt-0">
+           <Navigation onRefresh={fetchData} refreshing={loading} />
+
            <div className="flex gap-2 justify-end">
              {backtestDate && backtestDate !== new Date().toISOString().split('T')[0] && (
                <button 
@@ -188,10 +190,6 @@ function SectorsPageContent() {
                  Reset to Live
                </button>
              )}
-             <button onClick={fetchData} disabled={loading} className="flex justify-center items-center gap-2 px-4 sm:px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-xs sm:text-sm font-bold text-white transition-all shadow-lg shadow-blue-900/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-               <RefreshCw className={`w-3.5 sm:w-4 h-3.5 sm:h-4 ${loading ? 'animate-spin' : ''}`} />
-               {loading ? 'Calculating...' : 'Update Chart'}
-             </button>
            </div>
         </div>
       </header>
@@ -221,6 +219,38 @@ function SectorsPageContent() {
               <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
               <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
               <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+              
+              {/* Benchmark Toggle */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Benchmark</label>
+                <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-1 h-10">
+                  <button
+                    onClick={() => setBenchmark('sector')}
+                    className={`px-2.5 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
+                      benchmark === 'sector'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    vs {sectorName}
+                  </button>
+                  <div className="w-px h-4 bg-slate-600"></div>
+                  <button
+                    onClick={() => setBenchmark('nifty')}
+                    className={`px-2.5 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
+                      benchmark === 'nifty'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    vs NIFTY 50
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* ROC Period - Split to next row */}
+            <div className="grid grid-cols-1 sm:grid-cols-1 gap-4 w-full lg:w-auto">
               <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
             </div>
           </div>
@@ -239,7 +269,7 @@ function SectorsPageContent() {
             </p>
           </div>
         ) : (
-          <RRGChart data={data} interval={interval} config={config} benchmark={sectorName} enableSectorNavigation={false} />
+          <RRGChart data={data} interval={interval} config={config} benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} enableSectorNavigation={false} />
         )}
       </div>
 

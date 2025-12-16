@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     const rsWindow = parseInt(searchParams.get('rsWindow') || '14');
     const rocWindow = parseInt(searchParams.get('rocWindow') || '14');
     const dateParam = searchParams.get('date');
+    const benchmarkParam = searchParams.get('benchmark') || 'sector'; // 'sector' or 'nifty'
 
     // Get sector info
     const sectorInfo = SECTOR_CONSTITUENTS[sectorSymbol];
@@ -66,15 +67,19 @@ export async function GET(request: NextRequest) {
       interval: interval
     };
 
-    // Fetch sector index data (benchmark)
-    console.log(`[API] Fetching sector index: ${sectorSymbol} with options:`, queryOptions);
-    const sectorIndexData = await fetchWithRetry(sectorSymbol, queryOptions);
-    if (!sectorIndexData || sectorIndexData.length === 0) {
-      console.error(`[API] No data returned for sector index ${sectorSymbol}`);
-      throw new Error(`Failed to fetch sector index data for ${sectorSymbol}`);
+    // Determine benchmark to use
+    const benchmarkSymbol = benchmarkParam === 'nifty' ? '^NSEI' : sectorSymbol;
+    const benchmarkName = benchmarkParam === 'nifty' ? 'NIFTY 50' : sectorInfo.name;
+
+    // Fetch benchmark data
+    console.log(`[API] Fetching benchmark: ${benchmarkSymbol} with options:`, queryOptions);
+    const benchmarkData = await fetchWithRetry(benchmarkSymbol, queryOptions);
+    if (!benchmarkData || benchmarkData.length === 0) {
+      console.error(`[API] No data returned for benchmark ${benchmarkSymbol}`);
+      throw new Error(`Failed to fetch benchmark data for ${benchmarkSymbol}`);
     }
-    console.log(`[API] Sector index ${sectorSymbol} fetched successfully, ${sectorIndexData.length} data points`);
-    const sectorCloses = sectorIndexData.map((d: any) => d.close);
+    console.log(`[API] Benchmark ${benchmarkSymbol} fetched successfully, ${benchmarkData.length} data points`);
+    const benchmarkCloses = benchmarkData.map((d: any) => d.close);
 
     // Fetch all constituent stocks with individual error handling
     // Use staggered fetching to avoid rate limiting (batches of 3 with 200ms delay)
@@ -112,7 +117,7 @@ export async function GET(request: NextRequest) {
       }
 
       const closes = data.map((d: any) => d.close);
-      const fullHistory = calculateRRGData(closes, sectorCloses, rsWindow, rocWindow);
+      const fullHistory = calculateRRGData(closes, benchmarkCloses, rsWindow, rocWindow);
 
       if (!fullHistory || fullHistory.length === 0) {
         console.warn(`[API] RRG calculation failed for ${stock}`);
