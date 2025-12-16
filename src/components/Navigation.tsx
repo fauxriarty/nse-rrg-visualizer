@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, TrendingUp, RefreshCw } from 'lucide-react';
+import { BarChart3, TrendingUp, RefreshCw, Target } from 'lucide-react';
 
 type Props = {
   onRefresh?: () => void;
@@ -16,6 +16,7 @@ export default function Navigation({ onRefresh, refreshing = false, showRefresh 
   
   const isMarketView = pathname === '/';
   const isSectorView = pathname.startsWith('/sectors');
+  const isCustomView = pathname.startsWith('/custom');
   
   return (
     <nav className={`flex items-center gap-2 flex-wrap justify-center w-full sm:w-auto ${className}`}>
@@ -43,6 +44,19 @@ export default function Navigation({ onRefresh, refreshing = false, showRefresh 
         <TrendingUp className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
         <span className="hidden xs:inline">Sector Analysis</span>
         <span className="xs:hidden">Sectors</span>
+      </Link>
+
+      <Link 
+        href="/custom"
+        className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all whitespace-nowrap ${
+          isCustomView 
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
+            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+        }`}
+      >
+        <Target className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
+        <span className="hidden xs:inline">Custom Analysis</span>
+        <span className="xs:hidden">Custom</span>
       </Link>
 
       {showRefresh && (

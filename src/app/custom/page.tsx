@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
 import Navigation from '@/components/Navigation';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
-  Clock, SlidersHorizontal, History, TrendingUp
+  Clock, History, Target, Search, X, Plus
 } from 'lucide-react';
-import { SECTOR_INDICES } from '@/lib/sectorConfig';
 
 const INTERVAL_OPTIONS = [
   { label: 'Daily', value: '1d' },
@@ -16,34 +14,24 @@ const INTERVAL_OPTIONS = [
   { label: 'Monthly', value: '1mo' },
 ];
 
-function SectorsPageContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  
+export default function CustomAnalysisPage() {
   const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
-  const [sectorName, setSectorName] = useState('');
-  const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
-  const [showStockDropdown, setShowStockDropdown] = useState(false);
+  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
   // Configuration State
-  const [selectedSector, setSelectedSector] = useState(() => {
-    return searchParams.get('sector') || '^NSEBANK';
-  });
   const [interval, setIntervalState] = useState('1d');
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
-  const [benchmark, setBenchmark] = useState<'sector' | 'nifty'>('sector'); // 'sector' or 'nifty'
-
-  // Initialize sector name when selected sector changes
-  useEffect(() => {
-    const sectorInfo = SECTOR_INDICES.find(s => s.symbol === selectedSector);
-    if (sectorInfo) {
-      setSectorName(sectorInfo.name);
-    }
-  }, [selectedSector]);
 
   // Dynamic Options (same as main page)
   const rsOptions = useMemo(() => {
@@ -117,62 +105,99 @@ function SectorsPageContent() {
     if (!validRoc.includes(rocWindow)) setRocWindow(validRoc[0]); 
   }, [interval, rsOptions, rocOptions, rsWindow, rocWindow]);
 
+  // Search stocks
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const results = await res.json();
+        setSearchResults(results);
+        setShowResults(true);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, handleSearch]);
+
+  // Add stock to analysis
+  const addStock = useCallback((symbol: string) => {
+    if (!selectedStocks.includes(symbol)) {
+      setSelectedStocks([...selectedStocks, symbol]);
+      setSearchQuery('');
+      setShowResults(false);
+    }
+  }, [selectedStocks]);
+
+  // Remove stock from analysis
+  const removeStock = useCallback((symbol: string) => {
+    setSelectedStocks(selectedStocks.filter(s => s !== symbol));
+  }, [selectedStocks]);
+
+  // Fetch data for selected stocks
   const fetchData = useCallback(async () => {
+    if (selectedStocks.length === 0) {
+      setData([]);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({ 
-        sector: selectedSector,
+        stocks: selectedStocks.join(','),
         interval, 
         rsWindow, 
         rocWindow,
-        benchmark
       });
       
       if (backtestDate) {
         params.append('date', backtestDate);
       }
 
-      const res = await fetch(`/api/sector-stocks?${params.toString()}`);
+      const res = await fetch(`/api/stocks/custom?${params.toString()}`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error', details: 'No error details available' }));
         const errorMessage = errorData.error || errorData.details || `HTTP ${res.status}: ${res.statusText}`;
         console.error('API Error:', { status: res.status, statusText: res.statusText, errorData });
-        throw new Error(errorMessage);
+        setError(errorMessage);
+        setData([]);
+        return;
       }
       const json = await res.json();
+      setError(null);
       if (json.stocks) setData(json.stocks);
       if (json.config) setConfig(json.config);
-      if (json.sector) setSectorName(json.sector);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch data';
+      console.error('Fetch error:', err);
+      setError(errorMsg);
+      setData([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedSector, interval, rsWindow, rocWindow, backtestDate, benchmark]);
+  }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate]);
 
   useEffect(() => { 
     fetchData(); 
-    // Update URL
-    router.push(`/sectors?sector=${selectedSector}`, { scroll: false });
-  }, [selectedSector, fetchData]);
-
-  // Initialize selected stocks to all fetched stock names when data changes
-  useEffect(() => {
-    if (data && data.length > 0) {
-      setSelectedStocks(new Set(data.map((s: any) => s.name)));
-    } else {
-      setSelectedStocks(new Set());
-    }
-  }, [data]);
-
-  const handleSectorChange = (newSector: string) => {
-    setSelectedSector(newSector);
-    // Update sector name immediately based on the sector symbol
-    const sectorInfo = SECTOR_INDICES.find(s => s.symbol === newSector);
-    if (sectorInfo) {
-      setSectorName(sectorInfo.name);
-    }
-  };
+  }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate]);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
@@ -185,7 +210,7 @@ function SectorsPageContent() {
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
-            <p className="text-slate-400 text-xs sm:text-sm font-medium">Sector Stock Analysis</p>
+            <p className="text-slate-400 text-xs sm:text-sm font-medium">Custom Stock Analysis</p>
           </div>
         </div>
         
@@ -205,30 +230,23 @@ function SectorsPageContent() {
         </div>
       </header>
 
-      {/* SECTOR SELECTOR BAR */}
+      {/* SEARCH AND FILTERS BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="flex items-center gap-3 min-w-48">
                 <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
-                  <TrendingUp className="w-5 h-5 text-blue-400" />
+                  <Target className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-base text-white">Sector: {sectorName}</h2>
-                  <p className="text-xs text-slate-500">Select sector and configure parameters</p>
+                  <h2 className="font-bold text-base text-white">Custom Analysis</h2>
+                  <p className="text-xs text-slate-500">Search and add stocks vs NIFTY 50</p>
                 </div>
               </div>
               
-              {/* First row: sector + date + intervals + RS + ROC */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full lg:w-auto relative z-40">
-                <CustomSelect 
-                  label="Select Sector" 
-                  icon={<TrendingUp className="w-3.5 h-3.5" />} 
-                  value={selectedSector} 
-                  onChange={handleSectorChange} 
-                  options={SECTOR_INDICES.map(s => ({ label: s.name, value: s.symbol }))} 
-                />
+              {/* Filters row: date + intervals + RS + ROC */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto relative z-40">
                 <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
                 <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
                 <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
@@ -236,87 +254,112 @@ function SectorsPageContent() {
               </div>
             </div>
 
-            {/* Second row: Stocks multiselect + Benchmark toggle */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full relative z-40">
-              {/* Stocks Multiselect */}
-              <div className="flex flex-col gap-1.5 w-full relative">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5" /> Stocks
-                </label>
-                <button
-                  onClick={() => setShowStockDropdown(!showStockDropdown)}
-                  className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 h-11 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
-                >
-                  <span className="text-xs">{selectedStocks.size} of {data.length}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showStockDropdown ? 'rotate-180' : ''}`} />
-                </button>
-                {showStockDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto" style={{ zIndex: 999 }}>
-                    {data.map((stock: any) => (
-                      <label key={stock.name} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedStocks.has(stock.name)}
-                          onChange={(e) => {
-                            const next = new Set(selectedStocks);
-                            if (e.target.checked) next.add(stock.name); else next.delete(stock.name);
-                            setSelectedStocks(next);
-                          }}
-                          className="w-4 h-4 rounded border-slate-600 accent-blue-600 cursor-pointer"
-                        />
-                        <span className="text-xs text-slate-300">{stock.name}</span>
-                      </label>
+            {/* Stock Search Bar */}
+            <div className="flex flex-col gap-3">
+              <div className="relative">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Search stocks to add (e.g., RELIANCE, TCS, INFY)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500"
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  {searching && (
+                    <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
+                  )}
+                </div>
+
+                {/* Search Results Dropdown */}
+                {showResults && searchResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                    {searchResults.map((stock: any) => (
+                      <button
+                        key={stock.symbol}
+                        onClick={() => addStock(stock.symbol)}
+                        disabled={selectedStocks.includes(stock.symbol)}
+                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-b-0 transition-colors ${
+                          selectedStocks.includes(stock.symbol) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex flex-col items-start">
+                          <span className="text-sm font-semibold text-slate-200">{stock.symbol}</span>
+                          <span className="text-xs text-slate-400">{stock.name}</span>
+                        </div>
+                        {selectedStocks.includes(stock.symbol) ? (
+                          <span className="text-xs text-slate-500">Added</span>
+                        ) : (
+                          <Plus className="w-4 h-4 text-blue-400" />
+                        )}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Benchmark Toggle */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Benchmark</label>
-                <div className="w-full flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-1.5 h-11">
-                  <button
-                    onClick={() => setBenchmark('sector')}
-                    className={`px-3 py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap ${
-                      benchmark === 'sector'
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Sector
-                  </button>
-                  <div className="w-px h-3 bg-slate-600"></div>
-                  <button
-                    onClick={() => setBenchmark('nifty')}
-                    className={`pl-3 ${
-                      benchmark === 'nifty'
-                        ? 'pr-4 bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                        : 'pr-3 text-slate-400 hover:text-slate-200'
-                    } py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap`}
-                  >
-                    NIFTY 50
-                  </button>
+              {/* Selected Stocks Pills */}
+              {selectedStocks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedStocks.map((symbol) => (
+                    <div
+                      key={symbol}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-sm text-blue-300"
+                    >
+                      <span className="font-semibold">{symbol}</span>
+                      <button
+                        onClick={() => removeStock(symbol)}
+                        className="hover:text-red-400 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
-
           </div>
         </div>
       </div>
 
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">
-        {loading || data.length === 0 ? (
+        {selectedStocks.length === 0 ? (
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 border-dashed shadow-inner">
+            <Target className="w-16 h-16 text-slate-700 mb-4" />
+            <p className="text-slate-400 text-lg font-bold mb-2">No Stocks Selected</p>
+            <p className="text-slate-500 text-sm">Search and add stocks above to start analyzing</p>
+          </div>
+        ) : error ? (
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-red-950/10 border border-red-900/30 rounded-2xl shadow-inner">
+            <div className="text-red-400 text-center">
+              <p className="text-lg font-bold mb-2">Error Loading Data</p>
+              <p className="text-sm text-red-300/80">{error}</p>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
              <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
             <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
-            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Analyzing {sectorName} Stocks...</p>
+            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Analyzing Selected Stocks...</p>
             <p className="text-slate-500 text-xs mt-2 relative z-10">
                 {backtestDate ? `Fetching history for ${backtestDate}` : 'Fetching live market data'}
             </p>
           </div>
+        ) : data.length > 0 ? (
+          <RRGChart 
+            data={data} 
+            interval={interval} 
+            config={config} 
+            benchmark="NIFTY 50" 
+            enableSectorNavigation={false} 
+          />
         ) : (
-          <RRGChart data={data} interval={interval} config={config} benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} enableSectorNavigation={false} selectedSectorNames={selectedStocks} />
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner">
+            <Activity className="w-12 h-12 text-slate-700 mb-4" />
+            <p className="text-slate-400 text-base font-bold mb-2">No Data Available</p>
+            <p className="text-slate-500 text-sm">Unable to fetch data for selected stocks</p>
+          </div>
         )}
       </div>
 
@@ -364,20 +407,5 @@ function CustomSelect({ label, icon, value, onChange, options, isDate = false }:
         </div>
       </div>
     </div>
-  );
-}
-
-export default function SectorsPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-          <p className="text-slate-400">Loading sector analysis...</p>
-        </div>
-      </div>
-    }>
-      <SectorsPageContent />
-    </Suspense>
   );
 }
