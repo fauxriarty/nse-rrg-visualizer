@@ -24,6 +24,8 @@ function SectorsPageContent() {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>(null);
   const [sectorName, setSectorName] = useState('');
+  const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
+  const [showStockDropdown, setShowStockDropdown] = useState(false);
 
   // Configuration State
   const [selectedSector, setSelectedSector] = useState(() => {
@@ -154,6 +156,15 @@ function SectorsPageContent() {
     router.push(`/sectors?sector=${selectedSector}`, { scroll: false });
   }, [selectedSector, fetchData]);
 
+  // Initialize selected stocks to all fetched stock names when data changes
+  useEffect(() => {
+    if (data && data.length > 0) {
+      setSelectedStocks(new Set(data.map((s: any) => s.name)));
+    } else {
+      setSelectedStocks(new Set());
+    }
+  }, [data]);
+
   const handleSectorChange = (newSector: string) => {
     setSelectedSector(newSector);
     // Update sector name immediately based on the sector symbol
@@ -197,30 +208,69 @@ function SectorsPageContent() {
       {/* SECTOR SELECTOR BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="flex items-center gap-3 min-w-48">
-              <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
-                <TrendingUp className="w-5 h-5 text-blue-400" />
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex items-center gap-3 min-w-48">
+                <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
+                  <TrendingUp className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-base text-white">Sector: {sectorName}</h2>
+                  <p className="text-xs text-slate-500">Select sector and configure parameters</p>
+                </div>
               </div>
-              <div>
-                <h2 className="font-bold text-base text-white">Sector: {sectorName}</h2>
-                <p className="text-xs text-slate-500">Select sector and configure parameters</p>
+              
+              {/* First row: sector + date + intervals + RS + ROC */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full lg:w-auto relative z-40">
+                <CustomSelect 
+                  label="Select Sector" 
+                  icon={<TrendingUp className="w-3.5 h-3.5" />} 
+                  value={selectedSector} 
+                  onChange={handleSectorChange} 
+                  options={SECTOR_INDICES.map(s => ({ label: s.name, value: s.symbol }))} 
+                />
+                <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
+                <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
+                <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+                <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
               </div>
             </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 w-full lg:w-auto">
-              <CustomSelect 
-                label="Select Sector" 
-                icon={<TrendingUp className="w-3.5 h-3.5" />} 
-                value={selectedSector} 
-                onChange={handleSectorChange} 
-                options={SECTOR_INDICES.map(s => ({ label: s.name, value: s.symbol }))} 
-              />
-              <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
-              <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
-              <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
-              <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
-              
+
+            {/* Second row: Stocks multiselect + Benchmark toggle */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full relative z-40">
+              {/* Stocks Multiselect */}
+              <div className="flex flex-col gap-1.5 w-full relative">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                  <TrendingUp className="w-3.5 h-3.5" /> Stocks
+                </label>
+                <button
+                  onClick={() => setShowStockDropdown(!showStockDropdown)}
+                  className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
+                >
+                  <span className="text-xs">{selectedStocks.size} of {data.length}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showStockDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showStockDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto" style={{ zIndex: 999 }}>
+                    {data.map((stock: any) => (
+                      <label key={stock.name} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedStocks.has(stock.name)}
+                          onChange={(e) => {
+                            const next = new Set(selectedStocks);
+                            if (e.target.checked) next.add(stock.name); else next.delete(stock.name);
+                            setSelectedStocks(next);
+                          }}
+                          className="w-4 h-4 rounded border-slate-600 accent-blue-600 cursor-pointer"
+                        />
+                        <span className="text-xs text-slate-300">{stock.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Benchmark Toggle */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Benchmark</label>
@@ -240,11 +290,11 @@ function SectorsPageContent() {
                     onClick={() => setBenchmark('nifty')}
                     className={`pl-3 ${
                       benchmark === 'nifty'
-                        ? 'pr-1.5 bg-blue-600 text-white shadow-lg shadow-blue-900/20'
-                        : 'pr-1.5 text-slate-400 hover:text-slate-200'
+                        ? 'pr-4 bg-blue-600 text-white shadow-lg shadow-blue-900/20'
+                        : 'pr-3 text-slate-400 hover:text-slate-200'
                     } py-1.5 rounded text-xs font-semibold transition-all whitespace-nowrap`}
                   >
-                    NIFTY50
+                    NIFTY 50
                   </button>
                 </div>
               </div>
@@ -266,7 +316,7 @@ function SectorsPageContent() {
             </p>
           </div>
         ) : (
-          <RRGChart data={data} interval={interval} config={config} benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} enableSectorNavigation={false} />
+          <RRGChart data={data} interval={interval} config={config} benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} enableSectorNavigation={false} selectedSectorNames={selectedStocks} />
         )}
       </div>
 

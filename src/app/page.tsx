@@ -27,7 +27,10 @@ export default function Home() {
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedSectors, setSelectedSectors] = useState<Set<string>>(new Set(SECTOR_INDICES.map(s => s.name)));
+  const OVERVIEW_SECTORS = useMemo(() => SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50'), []);
+  const [selectedSectors, setSelectedSectors] = useState<Set<string>>(
+    new Set(SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50').map(s => s.name))
+  );
   const [showSectorDropdown, setShowSectorDropdown] = useState(false);
 
   // --- DYNAMIC OPTIONS ---
@@ -191,12 +194,12 @@ export default function Home() {
                   onClick={() => setShowSectorDropdown(!showSectorDropdown)}
                   className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
                 >
-                  <span className="text-xs">{selectedSectors.size} of {SECTOR_INDICES.length}</span>
+                  <span className="text-xs">{selectedSectors.size} of {OVERVIEW_SECTORS.length}</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${showSectorDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showSectorDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto" style={{ zIndex: 999 }}>
-                    {SECTOR_INDICES.map(sector => (
+                    {OVERVIEW_SECTORS.map(sector => (
                       <label key={sector.name} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
                         <input
                           type="checkbox"

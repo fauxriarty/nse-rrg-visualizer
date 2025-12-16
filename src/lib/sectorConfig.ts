@@ -1,5 +1,35 @@
 // Define the mapping of Sector Index Symbols to their Constituent Stocks
 export const SECTOR_CONSTITUENTS: Record<string, { name: string; stocks: string[] }> = {
+  '^NSEI': {
+    name: 'NIFTY 50',
+    stocks: [
+      'ADANIENT.NS','ADANIPORTS.NS','APOLLOHOSP.NS','ASIANPAINT.NS','AXISBANK.NS',
+      'BAJAJ-AUTO.NS','BAJAJFINSV.NS','BAJFINANCE.NS','BHARTIARTL.NS','BPCL.NS',
+      'BRITANNIA.NS','CIPLA.NS','COALINDIA.NS','DIVISLAB.NS','DRREDDY.NS',
+      'EICHERMOT.NS','GRASIM.NS','HCLTECH.NS','HDFCBANK.NS','HDFCLIFE.NS',
+      'HEROMOTOCO.NS','HINDALCO.NS','HINDUNILVR.NS','ICICIBANK.NS','INDUSINDBK.NS',
+      'INFY.NS','ITC.NS','JSWSTEEL.NS','KOTAKBANK.NS','LT.NS',
+      'LTIM.NS','M&M.NS','MARUTI.NS','NESTLEIND.NS','NTPC.NS',
+      'ONGC.NS','POWERGRID.NS','RELIANCE.NS','SBILIFE.NS','SBIN.NS',
+      'SHRIRAMFIN.NS','SUNPHARMA.NS','TATACONSUM.NS','TATAMOTORS.NS','TATASTEEL.NS',
+      'TCS.NS','TECHM.NS','TITAN.NS','ULTRACEMCO.NS','WIPRO.NS'
+    ]
+  },
+  '^NSMIDCP': {
+    name: 'Next 50',
+    stocks: [
+      'ABB.NS','ACC.NS','ADANIGREEN.NS','ADANIPOWER.NS','AMBUJACEM.NS',
+      'AUROPHARMA.NS','BANKBARODA.NS','BEL.NS','BERGEPAINT.NS','BOSCHLTD.NS',
+      'CANBK.NS','CHOLAFIN.NS','COLPAL.NS','DABUR.NS','DLF.NS',
+      'GAIL.NS','GODREJCP.NS','HAL.NS','HAVELLS.NS','HINDPETRO.NS',
+      'ICICIGI.NS','ICICIPRULI.NS','IGL.NS','INDIGO.NS','IRCTC.NS',
+      'LUPIN.NS','MARICO.NS','UNITDSPR.NS','MUTHOOTFIN.NS','NAUKRI.NS',
+      'PAGEIND.NS','PIDILITIND.NS','PFC.NS','RECLTD.NS','SBICARD.NS',
+      'SHREECEM.NS','SIEMENS.NS','SRF.NS','TATAELXSI.NS','TATACOMM.NS',
+      'TATAPOWER.NS','TVSMOTOR.NS','UBL.NS','VOLTAS.NS','ZYDUSLIFE.NS',
+      'ADANIENSOL.NS','DMART.NS','HDFCAMC.NS','APOLLOTYRE.NS','ABBOTINDIA.NS'
+    ]
+  },
   '^NSEBANK': {
     name: 'Bank',
     stocks: ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'KOTAKBANK.NS', 'AXISBANK.NS', 'INDUSINDBK.NS', 'BANKBARODA.NS', 'PNB.NS', 'IDFCFIRSTB.NS', 'AUBANK.NS']
@@ -67,6 +97,8 @@ export const SECTOR_CONSTITUENTS: Record<string, { name: string; stocks: string[
 
 // This matches the list in your main route.ts
 export const SECTOR_INDICES = [
+  { symbol: '^NSEI', name: 'NIFTY 50' },
+  { symbol: '^NSMIDCP', name: 'Next 50' },
   { symbol: '^NSEBANK', name: 'Bank' },
   { symbol: '^CNXIT', name: 'IT' },
   { symbol: '^CNXAUTO', name: 'Auto' },
