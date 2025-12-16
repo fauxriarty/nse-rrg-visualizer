@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RRGChart from '@/components/RRGChart';
-import Navigation from '@/components/Navigation';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, SlidersHorizontal, History, TrendingUp
@@ -177,34 +176,6 @@ function SectorsPageContent() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
       
-      {/* HEADER */}
-      <header className="max-w-7xl mx-auto mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
-            <Activity className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
-            <p className="text-slate-400 text-xs sm:text-sm font-medium">Sector Stock Analysis</p>
-          </div>
-        </div>
-        
-        <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3 w-full sm:w-auto sm:justify-end mt-2 sm:mt-0">
-           <Navigation onRefresh={fetchData} refreshing={loading} />
-
-           <div className="flex gap-2 justify-end">
-             {backtestDate && backtestDate !== new Date().toISOString().split('T')[0] && (
-               <button 
-                  onClick={() => setBacktestDate(new Date().toISOString().split('T')[0])}
-                  className="px-3 sm:px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold text-slate-300 transition-all border border-slate-700"
-               >
-                 Reset to Live
-               </button>
-             )}
-           </div>
-        </div>
-      </header>
-
       {/* SECTOR SELECTOR BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
