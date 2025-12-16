@@ -5,7 +5,7 @@ import RRGChart from '@/components/RRGChart';
 import Navigation from '@/components/Navigation';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
-  Clock, History, Target, Search, X, Plus
+  Clock, History, Target, Search, X, Plus, Save, Trash2
 } from 'lucide-react';
 
 const INTERVAL_OPTIONS = [
@@ -20,6 +20,13 @@ export default function CustomAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
   const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
+  const [savedLists, setSavedLists] = useState<any[]>([]);
+  const [selectedListId, setSelectedListId] = useState('');
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [savingList, setSavingList] = useState(false);
+  const [showSavedDropdown, setShowSavedDropdown] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,12 +105,34 @@ export default function CustomAnalysisPage() {
     ];
   }, [interval]);
 
+  const savedListOptions = useMemo(() => {
+    return [
+      { label: 'No Saved List', value: '' },
+      ...savedLists.map((l: any) => ({ label: l.name, value: l.id }))
+    ];
+  }, [savedLists]);
+
   useEffect(() => {
     const validRs = rsOptions.map(o => o.value.toString());
     const validRoc = rocOptions.map(o => o.value.toString());
     if (!validRs.includes(rsWindow)) setRsWindow(validRs[validRs.length - 1]); 
     if (!validRoc.includes(rocWindow)) setRocWindow(validRoc[0]); 
   }, [interval, rsOptions, rocOptions, rsWindow, rocWindow]);
+
+  const loadSavedLists = useCallback(async () => {
+    try {
+      const res = await fetch('/api/custom-lists');
+      if (!res.ok) return;
+      const json = await res.json();
+      setSavedLists(json.lists || []);
+    } catch (err) {
+      console.error('Load saved lists error:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSavedLists();
+  }, [loadSavedLists]);
 
   // Search stocks
   const handleSearch = useCallback(async (query: string) => {
@@ -142,12 +171,14 @@ export default function CustomAnalysisPage() {
       setSelectedStocks([...selectedStocks, symbol]);
       setSearchQuery('');
       setShowResults(false);
+      setSelectedListId('');
     }
   }, [selectedStocks]);
 
   // Remove stock from analysis
   const removeStock = useCallback((symbol: string) => {
     setSelectedStocks(selectedStocks.filter(s => s !== symbol));
+    setSelectedListId('');
   }, [selectedStocks]);
 
   // Fetch data for selected stocks
@@ -199,6 +230,67 @@ export default function CustomAnalysisPage() {
     fetchData(); 
   }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate]);
 
+  const handleSelectSavedList = useCallback((listId: string) => {
+    setSelectedListId(listId);
+    if (!listId) return;
+    const found = savedLists.find((l: any) => l.id === listId);
+    if (found) {
+      setSelectedStocks(found.stocks || []);
+    }
+  }, [savedLists]);
+
+  const handleSaveList = useCallback(async () => {
+    if (selectedStocks.length === 0) return;
+    setSavingList(true);
+    try {
+      const res = await fetch('/api/custom-lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: saveName || 'My List', stocks: selectedStocks })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save list' }));
+        throw new Error(err.error || 'Failed to save list');
+      }
+      const json = await res.json();
+      setSavedLists(json.lists || []);
+      if (json.list?.id) setSelectedListId(json.list.id);
+      setShowSaveModal(false);
+      setSaveName('');
+    } catch (err) {
+      console.error('Save list error:', err);
+    } finally {
+      setSavingList(false);
+    }
+  }, [selectedStocks, saveName]);
+
+  const requestDeleteList = useCallback((id: string, name: string) => {
+    setDeleteTarget({ id, name });
+    setShowSavedDropdown(false);
+  }, []);
+
+  const confirmDeleteList = useCallback(async () => {
+    if (!deleteTarget?.id) return;
+    try {
+      const res = await fetch(`/api/custom-lists?id=${encodeURIComponent(deleteTarget.id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to delete list' }));
+        throw new Error(err.error || 'Failed to delete list');
+      }
+      const json = await res.json();
+      setSavedLists(json.lists || []);
+      if (selectedListId === deleteTarget.id) {
+        setSelectedListId('');
+        setSelectedStocks([]);
+      }
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Delete list error:', err);
+    }
+  }, [deleteTarget, selectedListId]);
+
+  const cancelDelete = useCallback(() => setDeleteTarget(null), []);
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
       
@@ -245,8 +337,48 @@ export default function CustomAnalysisPage() {
                 </div>
               </div>
               
-              {/* Filters row: date + intervals + RS + ROC */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full lg:w-auto relative z-40">
+              {/* Filters row: saved list + date + intervals + RS + ROC */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full lg:w-auto relative z-40">
+                <div className="flex flex-col gap-1.5 w-full">
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                    <Save className="w-3.5 h-3.5" /> Saved Lists
+                  </label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowSavedDropdown(!showSavedDropdown)}
+                      className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 flex items-center justify-between hover:border-slate-500 transition"
+                    >
+                      <span className="text-xs">
+                        {selectedListId ? (savedLists.find((l: any) => l.id === selectedListId)?.name || 'Saved list') : 'No Saved List'}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showSavedDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showSavedDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                        {savedLists.length === 0 && (
+                          <div className="px-4 py-3 text-xs text-slate-500">No saved lists</div>
+                        )}
+                        {savedLists.map((list: any) => (
+                          <div key={list.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-b-0">
+                            <button
+                              onClick={() => { handleSelectSavedList(list.id); setShowSavedDropdown(false); }}
+                              className="text-left text-sm text-slate-200 font-semibold flex-1"
+                            >
+                              {list.name}
+                            </button>
+                            <button
+                              onClick={() => requestDeleteList(list.id, list.name)}
+                              className="text-slate-500 hover:text-red-400"
+                              title="Delete list"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
                 <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
                 <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
@@ -254,21 +386,36 @@ export default function CustomAnalysisPage() {
               </div>
             </div>
 
-            {/* Stock Search Bar */}
+            {/* Stock Search Bar + Save */}
             <div className="flex flex-col gap-3">
               <div className="relative">
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search stocks to add (e.g., RELIANCE, TCS, INFY)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg pl-10 pr-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500"
-                  />
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  {searching && (
-                    <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
-                  )}
+                <div className="relative flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Search stocks to add (e.g., RELIANCE, TCS, INFY)..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg pl-10 pr-10 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500"
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    {searching && (
+                      <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowSaveModal(true)}
+                    disabled={selectedStocks.length === 0}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                      selectedStocks.length === 0
+                        ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
+                        : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500 shadow-lg shadow-blue-500/10'
+                    }`}
+                    title={selectedStocks.length === 0 ? 'Add at least one stock to save' : 'Save this list'}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save List
+                  </button>
                 </div>
 
                 {/* Search Results Dropdown */}
@@ -321,6 +468,80 @@ export default function CustomAnalysisPage() {
           </div>
         </div>
       </div>
+
+      {/* Save List Modal */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5 relative">
+            <button
+              onClick={() => setShowSaveModal(false)}
+              className="absolute top-3 right-3 text-slate-400 hover:text-white"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <Save className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg">Save Stock List</h3>
+                <p className="text-xs text-slate-400">Give this list a name to reuse later (saved per IP)</p>
+              </div>
+            </div>
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">List Name</label>
+            <input
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="e.g., Momentum Picks"
+              className="w-full mt-1 bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveList}
+                disabled={savingList || selectedStocks.length === 0}
+                className={`px-3 py-2 text-sm font-semibold rounded-lg border transition-all flex items-center gap-2 ${
+                  savingList || selectedStocks.length === 0
+                    ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
+                    : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500 shadow-lg shadow-blue-500/10'
+                }`}
+              >
+                {savingList ? 'Saving...' : 'Save List'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5">
+            <h3 className="text-white font-bold text-lg mb-2">Delete saved list?</h3>
+            <p className="text-sm text-slate-300">This will remove "{deleteTarget.name}" for your IP.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={cancelDelete}
+                className="px-3 py-2 text-sm font-semibold text-slate-300 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteList}
+                className="px-3 py-2 text-sm font-semibold rounded-lg border border-red-500 text-white bg-red-600 hover:bg-red-500 shadow-lg shadow-red-500/10"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">
