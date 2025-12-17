@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RRGChart from '@/components/RRGChart';
+import StockPriceChart from '@/components/StockPriceChart';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, SlidersHorizontal, History, TrendingUp
@@ -25,6 +26,8 @@ function SectorsPageContent() {
   const [sectorName, setSectorName] = useState('');
   const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
   const [showStockDropdown, setShowStockDropdown] = useState(false);
+  const [hoveredStock, setHoveredStock] = useState<string | null>(null);
+  const [showStockChart, setShowStockChart] = useState(false);
 
   // Configuration State
   const [selectedSector, setSelectedSector] = useState(() => {
@@ -287,7 +290,30 @@ function SectorsPageContent() {
             </p>
           </div>
         ) : (
-          <RRGChart data={data} interval={interval} config={config} benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} enableSectorNavigation={false} selectedSectorNames={selectedStocks} />
+          <>
+            <RRGChart 
+              data={data} 
+              interval={interval} 
+              config={config} 
+              benchmark={benchmark === 'nifty' ? 'NIFTY 50' : sectorName} 
+              enableSectorNavigation={false} 
+              selectedSectorNames={selectedStocks}
+              onStockHover={(stockName) => {
+                setHoveredStock(stockName);
+                setShowStockChart(!!stockName);
+              }}
+            />
+            {hoveredStock && (
+              <StockPriceChart 
+                stockName={hoveredStock} 
+                isOpen={showStockChart} 
+                onClose={() => {
+                  setShowStockChart(false);
+                  setHoveredStock(null);
+                }}
+              />
+            )}
+          </>
         )}
       </div>
 

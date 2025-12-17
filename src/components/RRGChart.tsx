@@ -22,6 +22,7 @@ interface RRGChartProps {
   benchmark?: string; // Optional benchmark name (defaults to NIFTY 50)
   enableSectorNavigation?: boolean; // Enable clicking sectors to navigate
   selectedSectorNames?: Set<string>; // Filter which sectors to display (optional)
+  onStockHover?: (stockName: string | null) => void; // Callback when hovering over a stock
 }
 
 const generateSmartTicks = (min: number, max: number, zoomLevel: number = 1) => {
@@ -60,7 +61,7 @@ const ABBREVIATIONS: { [key: string]: string } = {
   'Nifty 500': 'N5',
 };
 
-export default function RRGChart({ data, interval = '1wk', config, benchmark = 'NIFTY 50', enableSectorNavigation = true, selectedSectorNames }: RRGChartProps) {
+export default function RRGChart({ data, interval = '1wk', config, benchmark = 'NIFTY 50', enableSectorNavigation = true, selectedSectorNames, onStockHover }: RRGChartProps) {
   
   const router = useRouter();
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
@@ -183,14 +184,15 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
 
   // --- HANDLERS ---
   const handleBackgroundClick = () => {
-    setHoveredSector(null); // Click anywhere empty -> De-hover
+    setHoveredSector(null);
+    onStockHover?.(null);
   };
 
   const handlePointClick = (e: any, sectorName: string) => {
-    e.stopPropagation(); // Stop the background click from immediately clearing this
+    e.stopPropagation();
     setHoveredSector(sectorName);
+    onStockHover?.(sectorName);
     
-    // Navigate to sector analysis if enabled and it's a known sector
     if (enableSectorNavigation) {
       const sectorInfo = SECTOR_INDICES.find(s => s.name === sectorName);
       if (sectorInfo) {
@@ -404,11 +406,13 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
                 <g 
                   onMouseEnter={() => {
                     setHoveredSector(payload.name);
+                    onStockHover?.(payload.name);
                     if(onMouseEnter) onMouseEnter(props);
                   }}
                   onMouseLeave={() => {
                     if (hoveredSector === payload.name) {
                       setHoveredSector(null);
+                      onStockHover?.(null);
                     }
                   }}
                   onClick={(e) => handlePointClick(e, payload.name)}

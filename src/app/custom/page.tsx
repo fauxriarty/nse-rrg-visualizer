@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
+import StockPriceChart from '@/components/StockPriceChart';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, History, Target, Search, X, Plus, Save, Trash2
@@ -26,6 +27,8 @@ export default function CustomAnalysisPage() {
   const [savingList, setSavingList] = useState(false);
   const [showSavedDropdown, setShowSavedDropdown] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [hoveredStock, setHoveredStock] = useState<string | null>(null);
+  const [showStockChart, setShowStockChart] = useState(false);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -539,13 +542,29 @@ export default function CustomAnalysisPage() {
             </p>
           </div>
         ) : data.length > 0 ? (
-          <RRGChart 
-            data={data} 
-            interval={interval} 
-            config={config} 
-            benchmark="NIFTY 50" 
-            enableSectorNavigation={false} 
-          />
+          <>
+            <RRGChart 
+              data={data} 
+              interval={interval} 
+              config={config} 
+              benchmark="NIFTY 50" 
+              enableSectorNavigation={false}
+              onStockHover={(stockName) => {
+                setHoveredStock(stockName);
+                setShowStockChart(!!stockName);
+              }}
+            />
+            {hoveredStock && (
+              <StockPriceChart 
+                stockName={hoveredStock} 
+                isOpen={showStockChart} 
+                onClose={() => {
+                  setShowStockChart(false);
+                  setHoveredStock(null);
+                }}
+              />
+            )}
+          </>
         ) : (
           <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner">
             <Activity className="w-12 h-12 text-slate-700 mb-4" />
