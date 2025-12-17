@@ -139,38 +139,38 @@ export default function Home() {
       
       {/* CONFIGURATION BAR */}
       <div className="max-w-7xl mx-auto mb-8 relative z-40">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-visible">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-5 shadow-xl relative overflow-visible">
           <div className="absolute inset-0 bg-linear-to-br from-blue-600/5 to-purple-600/5 pointer-events-none"></div>
           
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-            <div className="flex items-center gap-3 min-w-48">
-              <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
-                <SlidersHorizontal className="w-5 h-5 text-blue-400" />
+          <div className="flex flex-col gap-4 sm:gap-6 relative z-10">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-fit">
+              <div className="p-1.5 sm:p-2 bg-slate-800 rounded-lg border border-slate-700">
+                <SlidersHorizontal className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
               </div>
               <div>
-                <h2 className="font-bold text-base text-white">Configuration</h2>
+                <h2 className="font-bold text-sm sm:text-base text-white">Configuration</h2>
                 <p className="text-xs text-slate-500">Adjust math parameters</p>
               </div>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 w-full lg:w-auto">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-4 w-full">
               
               {/* SECTOR MULTISELECT */}
               <div className="flex flex-col gap-1.5 w-full relative">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
-                  <TrendingUp className="w-3.5 h-3.5" /> Sectors
+                <label className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                  <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Sectors
                 </label>
                 <button
                   onClick={() => setShowSectorDropdown(!showSectorDropdown)}
-                  className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
+                  className="w-full bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg px-2 sm:px-3 py-2 sm:py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer flex items-center justify-between"
                 >
                   <span className="text-xs">{selectedSectors.size} of {OVERVIEW_SECTORS.length}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showSectorDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform ${showSectorDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 {showSectorDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-lg shadow-lg z-50 max-h-64 overflow-y-auto" style={{ zIndex: 999 }}>
                     {OVERVIEW_SECTORS.map(sector => (
-                      <label key={sector.name} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
+                      <label key={sector.name} className="flex items-center gap-2 px-2 sm:px-3 py-2 sm:py-2.5 hover:bg-slate-800 cursor-pointer border-b border-slate-800/50 last:border-b-0">
                         <input
                           type="checkbox"
                           checked={selectedSectors.has(sector.name)}
@@ -183,7 +183,7 @@ export default function Home() {
                             }
                             setSelectedSectors(newSelected);
                           }}
-                          className="w-4 h-4 rounded border-slate-600 accent-blue-600 cursor-pointer"
+                          className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-600 accent-blue-600 cursor-pointer"
                         />
                         <span className="text-xs text-slate-300">{sector.name}</span>
                       </label>
@@ -194,8 +194,8 @@ export default function Home() {
 
               {/* --- BACKTESTING DATE PICKER --- */}
               <div className="flex flex-col gap-1.5 w-full">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
-                  <History className="w-3.5 h-3.5" /> Backtest Date
+                <label className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
+                  <History className="w-3 h-3 sm:w-3.5 sm:h-3.5" /> Backtest Date
                 </label>
                 <div className="relative group">
                   <input 
@@ -203,14 +203,14 @@ export default function Home() {
                     max={new Date().toISOString().split("T")[0]} // Limit to today
                     value={backtestDate} 
                     onChange={(e) => setBacktestDate(e.target.value)}
-                    className="w-full bg-slate-900 text-sm text-slate-200 border border-slate-700 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer"
+                    className="w-full bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg px-2 sm:px-4 py-2 sm:py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500 cursor-pointer"
                   />
                 </div>
               </div>
 
-              <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
-              <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
-              <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
+              <CustomSelect label="Interval" icon={<Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
+              <CustomSelect label="RS Period" icon={<BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+              <CustomSelect label="ROC Period" icon={<Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
             </div>
           </div>
         </div>

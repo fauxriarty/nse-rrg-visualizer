@@ -20,58 +20,58 @@ export default function StickyNavbar() {
   
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-slate-950 border-b border-slate-800 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-3.5 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-3">
         {/* Logo */}
-        <div className="flex items-center gap-3 min-w-fit">
-          <div className="p-3 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/20">
-            <BarChart3 className="w-6 h-6 text-white" />
+        <div className="flex items-center gap-2 min-w-fit">
+          <div className="p-2 sm:p-3 bg-blue-600 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20">
+            <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div className="hidden sm:block">
-            <h1 className="text-xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
+            <h1 className="text-lg sm:text-xl font-black text-white tracking-tight">Market<span className="text-blue-500">RRG</span></h1>
             <p className="text-xs text-slate-500 font-medium">NSE Relative Rotation Graphs</p>
           </div>
         </div>
 
         {/* Navigation Links & Refresh */}
-        <div className="flex items-center gap-2.5">
-          <nav className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
+          <nav className="flex items-center gap-1.5 sm:gap-2.5">
             <Link 
               href="/"
-              className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-sm sm:text-base font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 md:px-5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm md:text-base font-semibold transition-all whitespace-nowrap ${
                 isMarketView 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              <BarChart3 className="w-4 h-4" />
-              <span className="hidden xs:inline">Market Overview</span>
-              <span className="xs:hidden">Market</span>
+              <BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Market Overview</span>
+              <span className="sm:hidden">Market</span>
             </Link>
             
             <Link 
               href="/sectors"
-              className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-sm sm:text-base font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 md:px-5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm md:text-base font-semibold transition-all whitespace-nowrap ${
                 isSectorView 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              <TrendingUp className="w-4 h-4" />
-              <span className="hidden xs:inline">Sector Analysis</span>
-              <span className="xs:hidden">Sectors</span>
+              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Sector Analysis</span>
+              <span className="sm:hidden">Sectors</span>
             </Link>
 
             <Link 
               href="/custom"
-              className={`flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-sm sm:text-base font-semibold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 md:px-5 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm md:text-base font-semibold transition-all whitespace-nowrap ${
                 isCustomView 
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
                   : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
               }`}
             >
-              <Target className="w-4 h-4" />
-              <span className="hidden xs:inline">Custom Analysis</span>
-              <span className="xs:hidden">Custom</span>
+              <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Custom Analysis</span>
+              <span className="sm:hidden">Custom</span>
             </Link>
           </nav>
 
@@ -79,10 +79,10 @@ export default function StickyNavbar() {
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="ml-2 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 rounded-lg text-white transition-all"
+            className="ml-1 sm:ml-2 p-1.5 sm:p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-500 rounded-lg text-white transition-all"
             title="Refresh"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
