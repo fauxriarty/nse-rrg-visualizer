@@ -1,31 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseServer';
 
-function getClientIp(req: NextRequest): string {
-  // Try x-forwarded-for header first (set by proxies like Vercel, Nginx, etc.)
-  const forwardedFor = req.headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    const ips = forwardedFor.split(',').map(ip => ip.trim());
-    return ips[0];
-  }
-
-  // Try cf-connecting-ip (Cloudflare)
-  const cfConnectingIp = req.headers.get('cf-connecting-ip');
-  if (cfConnectingIp) {
-    return cfConnectingIp;
-  }
-
-  // Try x-real-ip (Nginx reverse proxy)
-  const xRealIp = req.headers.get('x-real-ip');
-  if (xRealIp) {
-    return xRealIp;
-  }
-
-  // Fallback to request IP
-  const ip = (req as any).ip || '::1';
-  return ip;
-}
-
 export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-user-id');
@@ -54,7 +29,6 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const ip = getClientIp(req);
     const userId = req.headers.get('x-user-id');
     const body = await req.json().catch(() => null);
 

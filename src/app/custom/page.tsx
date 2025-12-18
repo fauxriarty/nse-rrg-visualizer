@@ -580,7 +580,7 @@ export default function CustomAnalysisPage() {
               </div>
               <div>
                 <h3 className="text-white font-bold text-lg">Save Stock List</h3>
-                <p className="text-xs text-slate-400">Give this list a name to reuse later (saved per IP)</p>
+                <p className="text-xs text-slate-400">Give this list a name to reuse later</p>
               </div>
             </div>
             <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">List Name</label>
@@ -618,7 +618,7 @@ export default function CustomAnalysisPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-5">
             <h3 className="text-white font-bold text-lg mb-2">Delete saved list?</h3>
-            <p className="text-sm text-slate-300">This will remove "{deleteTarget.name}" for your IP.</p>
+            <p className="text-sm text-slate-300">This will remove "{deleteTarget.name}".</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={cancelDelete}
