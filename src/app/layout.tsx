@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import StickyNavbar from "@/components/StickyNavbar";
+import { ToastProvider } from "@/components/Toast";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -28,11 +29,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased pt-20`}
-      >
-        <StickyNavbar />
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased pt-20`}>
+        <ToastProvider>
+          <StickyNavbar />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );

@@ -7,6 +7,7 @@ import {
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, History, Target, Search, X, Plus, Save, Trash2
 } from 'lucide-react';
+import { useToast } from '@/components/Toast';
 
 const INTERVAL_OPTIONS = [
   { label: 'Daily', value: '1d' },
@@ -15,6 +16,7 @@ const INTERVAL_OPTIONS = [
 ];
 
 export default function CustomAnalysisPage() {
+  const toast = useToast();
   const [userId, setUserId] = useState<string | null>(null);
     useEffect(() => {
       const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
@@ -83,13 +85,20 @@ export default function CustomAnalysisPage() {
     if (!uid) return;
     const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
     try {
-      await fetch('/api/user-settings', {
+      const res = await fetch('/api/user-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save settings' }));
+        throw new Error(err.error || err.details || 'Failed to save settings');
+      }
       localStorage.setItem(`defaults:${uid}`, JSON.stringify(payload));
-    } catch {}
+      toast.success('Settings saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save settings');
+    }
   }, [interval, rsWindow, rocWindow]);
 
   const resetDefaults = useCallback(() => {
@@ -329,9 +338,10 @@ export default function CustomAnalysisPage() {
       if (json.list?.id) setSelectedListId(json.list.id);
       setShowSaveModal(false);
       setSaveName('');
+      toast.success('List saved');
     } catch (err) {
       console.error('Save list error:', err);
-      alert(`Error saving list: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(err instanceof Error ? err.message : 'Failed to save list');
     } finally {
       setSavingList(false);
     }

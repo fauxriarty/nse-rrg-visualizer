@@ -8,6 +8,7 @@ import {
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, SlidersHorizontal, History, TrendingUp
 } from 'lucide-react';
+import { useToast } from '@/components/Toast';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 
 const INTERVAL_OPTIONS = [
@@ -17,6 +18,7 @@ const INTERVAL_OPTIONS = [
 ];
 
 function SectorsPageContent() {
+  const toast = useToast();
   // Require auth: redirect if not logged in
   useEffect(() => {
     const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
@@ -88,13 +90,20 @@ function SectorsPageContent() {
     if (!userId) return;
     const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
     try {
-      await fetch('/api/user-settings', {
+      const res = await fetch('/api/user-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save settings' }));
+        throw new Error(err.error || err.details || 'Failed to save settings');
+      }
       localStorage.setItem(`defaults:${userId}`, JSON.stringify(payload));
-    } catch {}
+      toast.success('Settings saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save settings');
+    }
   }, [interval, rsWindow, rocWindow]);
 
   const resetDefaults = useCallback(() => {

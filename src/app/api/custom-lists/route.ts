@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabaseServer';
 
 function getClientIp(req: NextRequest): string {
   // Try x-forwarded-for header first (set by proxies like Vercel, Nginx, etc.)

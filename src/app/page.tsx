@@ -8,6 +8,7 @@ import {
   BookOpen, Calculator, Database, Server, Sigma, History, X
 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
+import { useToast } from '@/components/Toast';
 
 // --- CONSTANTS ---
 const INTERVAL_OPTIONS = [
@@ -17,6 +18,7 @@ const INTERVAL_OPTIONS = [
 ];
 
 export default function Home() {
+    const toast = useToast();
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>(null);
@@ -60,13 +62,20 @@ export default function Home() {
     if (!uid) return;
     const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
     try {
-      await fetch('/api/user-settings', {
+      const res = await fetch('/api/user-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify(payload)
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Failed to save settings' }));
+        throw new Error(err.error || err.details || 'Failed to save settings');
+      }
       localStorage.setItem(`defaults:${uid}`, JSON.stringify(payload));
-    } catch {}
+      toast.success('Settings saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save settings');
+    }
   }, [interval, rsWindow, rocWindow]);
 
   const resetDefaults = useCallback(() => {
