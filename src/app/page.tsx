@@ -26,7 +26,63 @@ export default function Home() {
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
+  const [defaultsLoaded, setDefaultsLoaded] = useState(false);
   const OVERVIEW_SECTORS = useMemo(() => SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50'), []);
+
+  useEffect(() => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!uid || defaultsLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/user-settings', { headers: { 'x-user-id': uid } });
+        const json = await res.json();
+        const s = json.settings;
+        if (s) {
+          setIntervalState(s.interval || '1d');
+          setRsWindow(String(s.rsWindow ?? '14'));
+          setRocWindow(String(s.rocWindow ?? '14'));
+        } else {
+          const ls = localStorage.getItem(`defaults:${uid}`);
+          if (ls) {
+            const parsed = JSON.parse(ls);
+            setIntervalState(parsed.interval || '1d');
+            setRsWindow(String(parsed.rsWindow ?? '14'));
+            setRocWindow(String(parsed.rocWindow ?? '14'));
+          }
+        }
+      } catch {}
+      setDefaultsLoaded(true);
+    })();
+  }, [defaultsLoaded]);
+
+  const saveDefaults = useCallback(async () => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!uid) return;
+    const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
+    try {
+      await fetch('/api/user-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify(payload)
+      });
+      localStorage.setItem(`defaults:${uid}`, JSON.stringify(payload));
+    } catch {}
+  }, [interval, rsWindow, rocWindow]);
+
+  const resetDefaults = useCallback(() => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    const ls = uid ? localStorage.getItem(`defaults:${uid}`) : null;
+    if (ls) {
+      const parsed = JSON.parse(ls);
+      setIntervalState(parsed.interval || '1d');
+      setRsWindow(String(parsed.rsWindow ?? '14'));
+      setRocWindow(String(parsed.rocWindow ?? '14'));
+    } else {
+      setIntervalState('1d');
+      setRsWindow('14');
+      setRocWindow('14');
+    }
+  }, []);
   const [selectedSectors, setSelectedSectors] = useState<Set<string>>(
     new Set(SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50').map(s => s.name))
   );
@@ -211,6 +267,13 @@ export default function Home() {
               <CustomSelect label="Interval" icon={<Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
               <CustomSelect label="RS Period" icon={<BarChart3 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
               <CustomSelect label="ROC Period" icon={<Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
+            </div>
+
+            {/* Actions row */}
+            <div className="flex items-center gap-2 sm:gap-3 w-full mt-3">
+              <label className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
+              <button onClick={saveDefaults} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
+              <button onClick={resetDefaults} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
             </div>
           </div>
         </div>

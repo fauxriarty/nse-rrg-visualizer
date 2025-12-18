@@ -17,6 +17,13 @@ const INTERVAL_OPTIONS = [
 ];
 
 function SectorsPageContent() {
+  // Require auth: redirect if not logged in
+  useEffect(() => {
+    const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+    if (!userId) {
+      router.replace('/auth');
+    }
+  }, []);
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -38,6 +45,7 @@ function SectorsPageContent() {
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
   const [benchmark, setBenchmark] = useState<'sector' | 'nifty'>('sector'); // 'sector' or 'nifty'
+  const [defaultsLoaded, setDefaultsLoaded] = useState(false);
 
   // Initialize sector name when selected sector changes
   useEffect(() => {
@@ -46,6 +54,63 @@ function SectorsPageContent() {
       setSectorName(sectorInfo.name);
     }
   }, [selectedSector]);
+
+  // Load user defaults
+  useEffect(() => {
+    const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!userId || defaultsLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/user-settings', { headers: { 'x-user-id': userId } });
+        const json = await res.json();
+        const s = json.settings;
+        if (s) {
+          setIntervalState(s.interval || '1d');
+          setRsWindow(String(s.rsWindow ?? '14'));
+          setRocWindow(String(s.rocWindow ?? '14'));
+        } else {
+          // localStorage fallback
+          const ls = localStorage.getItem(`defaults:${userId}`);
+          if (ls) {
+            const parsed = JSON.parse(ls);
+            setIntervalState(parsed.interval || '1d');
+            setRsWindow(String(parsed.rsWindow ?? '14'));
+            setRocWindow(String(parsed.rocWindow ?? '14'));
+          }
+        }
+      } catch {}
+      setDefaultsLoaded(true);
+    })();
+  }, [defaultsLoaded]);
+
+  const saveDefaults = useCallback(async () => {
+    const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!userId) return;
+    const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
+    try {
+      await fetch('/api/user-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': userId },
+        body: JSON.stringify(payload)
+      });
+      localStorage.setItem(`defaults:${userId}`, JSON.stringify(payload));
+    } catch {}
+  }, [interval, rsWindow, rocWindow]);
+
+  const resetDefaults = useCallback(() => {
+    const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    const ls = userId ? localStorage.getItem(`defaults:${userId}`) : null;
+    if (ls) {
+      const parsed = JSON.parse(ls);
+      setIntervalState(parsed.interval || '1d');
+      setRsWindow(String(parsed.rsWindow ?? '14'));
+      setRocWindow(String(parsed.rocWindow ?? '14'));
+    } else {
+      setIntervalState('1d');
+      setRsWindow('14');
+      setRocWindow('14');
+    }
+  }, []);
 
   // Dynamic Options (same as main page)
   const rsOptions = useMemo(() => {
@@ -134,7 +199,10 @@ function SectorsPageContent() {
         params.append('date', backtestDate);
       }
 
-      const res = await fetch(`/api/sector-stocks?${params.toString()}`);
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+      const res = await fetch(`/api/sector-stocks?${params.toString()}`, {
+        headers: userId ? { 'x-user-id': userId } : {}
+      });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error', details: 'No error details available' }));
         const errorMessage = errorData.error || errorData.details || `HTTP ${res.status}: ${res.statusText}`;
@@ -183,7 +251,7 @@ function SectorsPageContent() {
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col gap-6">
               <div className="flex items-center gap-3 min-w-48">
                 <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
                   <TrendingUp className="w-5 h-5 text-blue-400" />
@@ -195,7 +263,7 @@ function SectorsPageContent() {
               </div>
               
               {/* First row: sector + date + intervals + RS + ROC */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full lg:w-auto relative z-40">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full relative z-40">
                 <CustomSelect 
                   label="Select Sector" 
                   icon={<TrendingUp className="w-3.5 h-3.5" />} 
@@ -207,6 +275,13 @@ function SectorsPageContent() {
                 <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
                 <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
                 <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
+              </div>
+
+              {/* Actions row */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
+                <button onClick={saveDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
+                <button onClick={resetDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
               </div>
             </div>
 

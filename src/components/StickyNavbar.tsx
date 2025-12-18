@@ -2,12 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BarChart3, TrendingUp, Target, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { BarChart3, TrendingUp, Target, RefreshCw, LogOut, User } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 
 export default function StickyNavbar() {
   const pathname = usePathname();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   
   const isMarketView = pathname === '/';
   const isSectorView = pathname.startsWith('/sectors');
@@ -16,6 +18,20 @@ export default function StickyNavbar() {
   const handleRefresh = () => {
     setIsRefreshing(true);
     window.location.reload();
+  };
+
+  useEffect(() => {
+    const name = typeof window !== 'undefined' ? localStorage.getItem('username') : null;
+    setUsername(name);
+  }, [pathname]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    localStorage.removeItem('userId');
+    localStorage.removeItem('username');
+    window.location.href = '/auth';
   };
   
   return (
@@ -84,6 +100,25 @@ export default function StickyNavbar() {
           >
             <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
+
+          {/* User / Logout */}
+          <div className="ml-1 sm:ml-2 flex items-center gap-1.5 sm:gap-2">
+            {username ? (
+              <div className="flex items-center gap-1.5 bg-slate-800 text-slate-200 rounded-lg px-2 sm:px-3 py-1.5">
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-300" />
+                <span className="text-xs sm:text-sm font-semibold max-w-28 truncate">{username}</span>
+                <button
+                  onClick={handleLogout}
+                  className="ml-1 p-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+              </div>
+            ) : (
+              <Link href="/auth" className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 md:px-5 py-1.5 sm:py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 text-xs sm:text-sm md:text-base font-semibold transition-all whitespace-nowrap">Login</Link>
+            )}
+          </div>
         </div>
       </div>
     </div>

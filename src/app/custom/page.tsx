@@ -15,6 +15,14 @@ const INTERVAL_OPTIONS = [
 ];
 
 export default function CustomAnalysisPage() {
+  const [userId, setUserId] = useState<string | null>(null);
+    useEffect(() => {
+      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+      setUserId(uid);
+      if (!uid) {
+        window.location.href = '/auth';
+      }
+    }, []);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +49,63 @@ export default function CustomAnalysisPage() {
   const [rsWindow, setRsWindow] = useState('14');
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
+  const [defaultsLoaded, setDefaultsLoaded] = useState(false);
+
+  // Load defaults for user
+  useEffect(() => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!uid || defaultsLoaded) return;
+    (async () => {
+      try {
+        const res = await fetch('/api/user-settings', { headers: { 'x-user-id': uid } });
+        const json = await res.json();
+        const s = json.settings;
+        if (s) {
+          setIntervalState(s.interval || '1d');
+          setRsWindow(String(s.rsWindow ?? '14'));
+          setRocWindow(String(s.rocWindow ?? '14'));
+        } else {
+          const ls = localStorage.getItem(`defaults:${uid}`);
+          if (ls) {
+            const parsed = JSON.parse(ls);
+            setIntervalState(parsed.interval || '1d');
+            setRsWindow(String(parsed.rsWindow ?? '14'));
+            setRocWindow(String(parsed.rocWindow ?? '14'));
+          }
+        }
+      } catch {}
+      setDefaultsLoaded(true);
+    })();
+  }, [defaultsLoaded]);
+
+  const saveDefaults = useCallback(async () => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    if (!uid) return;
+    const payload = { interval, rsWindow: Number(rsWindow), rocWindow: Number(rocWindow) };
+    try {
+      await fetch('/api/user-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+        body: JSON.stringify(payload)
+      });
+      localStorage.setItem(`defaults:${uid}`, JSON.stringify(payload));
+    } catch {}
+  }, [interval, rsWindow, rocWindow]);
+
+  const resetDefaults = useCallback(() => {
+    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+    const ls = uid ? localStorage.getItem(`defaults:${uid}`) : null;
+    if (ls) {
+      const parsed = JSON.parse(ls);
+      setIntervalState(parsed.interval || '1d');
+      setRsWindow(String(parsed.rsWindow ?? '14'));
+      setRocWindow(String(parsed.rocWindow ?? '14'));
+    } else {
+      setIntervalState('1d');
+      setRsWindow('14');
+      setRocWindow('14');
+    }
+  }, []);
 
   // Dynamic Options (same as main page)
   const rsOptions = useMemo(() => {
@@ -123,7 +188,8 @@ export default function CustomAnalysisPage() {
 
   const loadSavedLists = useCallback(async () => {
     try {
-      const res = await fetch('/api/custom-lists');
+      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+      const res = await fetch('/api/custom-lists', { headers: uid ? { 'x-user-id': uid } : {} });
       if (!res.ok) return;
       const json = await res.json();
       setSavedLists(json.lists || []);
@@ -245,14 +311,18 @@ export default function CustomAnalysisPage() {
     if (selectedStocks.length === 0) return;
     setSavingList(true);
     try {
+      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+      if (!uid) {
+        throw new Error('You must be logged in to save lists');
+      }
       const res = await fetch('/api/custom-lists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
         body: JSON.stringify({ name: saveName || 'My List', stocks: selectedStocks })
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Failed to save list' }));
-        throw new Error(err.error || 'Failed to save list');
+        throw new Error(err.error || err.details || 'Failed to save list');
       }
       const json = await res.json();
       setSavedLists(json.lists || []);
@@ -261,6 +331,7 @@ export default function CustomAnalysisPage() {
       setSaveName('');
     } catch (err) {
       console.error('Save list error:', err);
+      alert(`Error saving list: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setSavingList(false);
     }
@@ -274,7 +345,8 @@ export default function CustomAnalysisPage() {
   const confirmDeleteList = useCallback(async () => {
     if (!deleteTarget?.id) return;
     try {
-      const res = await fetch(`/api/custom-lists?id=${encodeURIComponent(deleteTarget.id)}`, { method: 'DELETE' });
+      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+      const res = await fetch(`/api/custom-lists?id=${encodeURIComponent(deleteTarget.id)}`, { method: 'DELETE', headers: uid ? { 'x-user-id': uid } : {} });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: 'Failed to delete list' }));
         throw new Error(err.error || 'Failed to delete list');
@@ -300,7 +372,7 @@ export default function CustomAnalysisPage() {
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+            <div className="flex flex-col gap-6">
               <div className="flex items-center gap-3 min-w-48">
                 <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
                   <Target className="w-5 h-5 text-blue-400" />
@@ -312,7 +384,7 @@ export default function CustomAnalysisPage() {
               </div>
               
               {/* Filters row: saved list + date + intervals + RS + ROC */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full lg:w-auto relative z-40">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full relative z-40">
                 <div className="flex flex-col gap-1.5 w-full">
                   <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
                     <Save className="w-3.5 h-3.5" /> Saved Lists
@@ -357,6 +429,13 @@ export default function CustomAnalysisPage() {
                 <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
                 <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
                 <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
+              </div>
+
+              {/* Actions row */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
+                <button onClick={saveDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
+                <button onClick={resetDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
               </div>
             </div>
 
@@ -434,6 +513,37 @@ export default function CustomAnalysisPage() {
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
+                      {selectedListId && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+                              if (!uid) {
+                                throw new Error('You must be logged in to delete from lists');
+                              }
+                              const res = await fetch('/api/custom-lists', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+                                body: JSON.stringify({ id: selectedListId, stock: symbol })
+                              });
+                              if (!res.ok) {
+                                const err = await res.json().catch(() => ({ error: 'Failed to delete stock' }));
+                                throw new Error(err.error || err.details || 'Failed to delete stock from list');
+                              }
+                              // Update saved lists state and selectedStocks
+                              setSelectedStocks((prev) => prev.filter((s) => s !== symbol));
+                              await loadSavedLists();
+                            } catch (err) {
+                              console.error('Remove stock from list error:', err);
+                              alert(`Error: ${err instanceof Error ? err.message : 'Failed to delete stock'}`);
+                            }
+                          }}
+                          className="hover:text-red-400 transition-colors"
+                          title="Delete from saved list"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -396,11 +396,10 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
               const isHovered = hoveredSector === payload.name;
               const opacity = hoveredSector ? (isHovered ? 1 : 0.1) : 1; 
               
-              // Alternate label positions: 0=left, 1=right
-              const isLeft = payload.originalIndex % 2 === 0;
-              const labelXOffset = isLeft ? -12 : 12;
+              // Place all labels on the left side for consistency
+              const labelXOffset = -12;
               const labelYOffset = 0;
-              const textAnchor: 'start' | 'middle' | 'end' = isLeft ? 'end' : 'start';
+              const textAnchor: 'start' | 'middle' | 'end' = 'end';
 
               return (
                 <g 
