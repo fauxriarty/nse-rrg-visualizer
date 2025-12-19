@@ -40,7 +40,7 @@ export default function StickyNavbar() {
       <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-2.5 sm:py-3.5">
         <div className="flex items-center justify-between gap-2">
           {/* Left: logo */}
-          <div className="flex items-center gap-2 min-w-fit">
+          <div className="flex items-center gap-2 min-w-fit pl-2 sm:pl-0">
             <div className="p-2 sm:p-3 bg-blue-600 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/20">
               <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
