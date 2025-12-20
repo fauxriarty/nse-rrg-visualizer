@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseServer';
 
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(req: NextRequest) {
   try {
@@ -36,9 +35,6 @@ export async function POST(req: NextRequest) {
   try {
     const userId = req.headers.get('x-user-id');
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!uuidRegex.test(userId)) {
-      return NextResponse.json({ error: 'Invalid user id', details: 'User id must be a UUID' }, { status: 400 });
-    }
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
 

@@ -9,6 +9,7 @@ export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,42 +25,39 @@ export default function AuthPage() {
     setError(null);
     try {
       if (mode === 'signup') {
-        const usedEmail = email || `${username}@example.com`;
-        // Create a confirmed user on the server (uses service role) to skip email verification
-        const res = await fetch('/api/auth/create-confirmed-user', {
+        if (password !== passwordConfirm) throw new Error('Passwords do not match');
+
+        // Use simple file-backed auth register
+        const res = await fetch('/api/simple-auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: usedEmail, password, username }),
+          body: JSON.stringify({ username, password }),
         });
-        const payload = await res.json();
+        const payload = await res.json().catch(()=>({}));
         if (!res.ok) throw new Error(payload.error || 'Failed to create user');
 
-        // Now sign in the newly-created user to create a client session
-        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email: usedEmail, password });
-        if (signInErr) throw signInErr;
-        const uid = signInData.user?.id;
-        if (uid) {
-          localStorage.setItem('userId', uid);
-          localStorage.setItem('username', username || usedEmail);
-          try {
-            await fetch('/api/migrate-lists', { method: 'POST', headers: { 'x-user-id': uid } });
-          } catch {}
-          router.replace('/');
-        }
+        // On success, store userId as username and continue
+        localStorage.setItem('userId', username);
+        localStorage.setItem('username', username);
+        try { await fetch('/api/migrate-lists', { method: 'POST', headers: { 'x-user-id': username } }); } catch {}
+        router.replace('/');
       } else {
-        const usedEmail = email || `${username}@example.com`;
-        const { data, error } = await supabase.auth.signInWithPassword({ email: usedEmail, password });
-        if (error) throw error;
-        const uid = data.user?.id;
-        if (uid) {
-          localStorage.setItem('userId', uid);
-          localStorage.setItem('username', username || usedEmail);
-          // Migrate any IP-based lists to this user
-          try {
-            await fetch('/api/migrate-lists', { method: 'POST', headers: { 'x-user-id': uid } });
-          } catch {}
-          router.replace('/');
-        }
+        // Log in via server endpoint which authenticates by username+password and returns tokens
+        // Use DB-backed simple-auth login
+        const res = await fetch('/api/simple-auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const payload = await res.json().catch(()=>({}));
+        if (!res.ok) throw new Error(payload.error || 'Login failed');
+
+        // Successful login — store user info and continue
+        const userId = payload?.user?.user_id || username;
+        localStorage.setItem('userId', userId);
+        localStorage.setItem('username', username);
+        try { await fetch('/api/migrate-lists', { method: 'POST', headers: { 'x-user-id': username } }); } catch {}
+        router.replace('/');
       }
     } catch (err: any) {
       setError(err.message || 'Authentication failed');
@@ -101,21 +99,25 @@ export default function AuthPage() {
             onChange={(e)=>setPassword(e.target.value)}
             placeholder="••••••••"
           />
-          <label className="text-xs text-slate-400">Email</label>
-          <input
-            type="email"
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
-            value={email}
-            onChange={(e)=>setEmail(e.target.value)}
-            placeholder="you@example.com"
-          />
+          {mode === 'signup' && (
+            <>
+              <label className="text-xs text-slate-400">Confirm Password</label>
+              <input
+                type="password"
+                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                value={passwordConfirm}
+                onChange={(e)=>setPasswordConfirm(e.target.value)}
+                placeholder="Confirm password"
+              />
+            </>
+          )}
         </div>
 
         {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
 
         <button
           onClick={handleAuth}
-          disabled={loading || !username || !password}
+          disabled={loading || !username || !password || (mode === 'signup' && !passwordConfirm)}
           className="w-full mt-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white text-sm font-semibold disabled:opacity-50"
         >{loading ? 'Please wait…' : mode==='login' ? 'Login' : 'Create Account'}</button>
       </div>
