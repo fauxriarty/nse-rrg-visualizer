@@ -12,6 +12,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     const userId = localStorage.getItem('userId');
@@ -24,13 +25,22 @@ export default function AuthPage() {
     try {
       if (mode === 'signup') {
         const usedEmail = email || `${username}@example.com`;
-        const { data, error } = await supabase.auth.signUp({ email: usedEmail, password });
-        if (error) throw error;
-        const uid = data.user?.id;
+        // Create a confirmed user on the server (uses service role) to skip email verification
+        const res = await fetch('/api/auth/create-confirmed-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: usedEmail, password, username }),
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'Failed to create user');
+
+        // Now sign in the newly-created user to create a client session
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email: usedEmail, password });
+        if (signInErr) throw signInErr;
+        const uid = signInData.user?.id;
         if (uid) {
           localStorage.setItem('userId', uid);
           localStorage.setItem('username', username || usedEmail);
-          // Migrate any IP-based lists to this user
           try {
             await fetch('/api/migrate-lists', { method: 'POST', headers: { 'x-user-id': uid } });
           } catch {}
