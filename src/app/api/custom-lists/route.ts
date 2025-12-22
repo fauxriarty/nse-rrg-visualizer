@@ -154,8 +154,8 @@ export async function PATCH(req: NextRequest) {
     if (!body || !body.id || !body.stock) {
       return NextResponse.json({ error: 'List id and stock are required' }, { status: 400 });
     }
-    
-    const { id, stock } = body;
+
+    const { id, stock, add } = body;
 
     // Fetch current list (user-authenticated)
     const { data: list, error: fetchErr } = await supabase
@@ -169,7 +169,17 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'List not found' }, { status: 404 });
     }
 
-    const updatedStocks = (list.stocks || []).filter((s: string) => s !== stock);
+    let updatedStocks: string[] = list.stocks || [];
+    if (add) {
+      // add stock if not present
+      if (!updatedStocks.includes(stock)) {
+        updatedStocks = [...updatedStocks, stock];
+      }
+    } else {
+      // remove stock (existing behavior)
+      updatedStocks = (updatedStocks || []).filter((s: string) => s !== stock);
+    }
+
     const { error: updErr } = await supabase
       .from('custom_lists')
       .update({ stocks: updatedStocks })

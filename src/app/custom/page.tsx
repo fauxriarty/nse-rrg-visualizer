@@ -243,14 +243,38 @@ export default function CustomAnalysisPage() {
   }, [searchQuery, handleSearch]);
 
   // Add stock to analysis
-  const addStock = useCallback((symbol: string) => {
-    if (!selectedStocks.includes(symbol)) {
-      setSelectedStocks([...selectedStocks, symbol]);
-      setSearchQuery('');
-      setShowResults(false);
-      setSelectedListId('');
+  const addStock = useCallback(async (symbol: string) => {
+    if (selectedStocks.includes(symbol)) return;
+    // Optimistically add to UI
+    setSelectedStocks((prev) => [...prev, symbol]);
+    setSearchQuery('');
+    setShowResults(false);
+
+    // If a saved list is selected, persist this addition to that list
+    if (selectedListId) {
+      try {
+        const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+        if (!uid) throw new Error('You must be logged in to modify saved lists');
+
+        const res = await fetch('/api/custom-lists', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+          body: JSON.stringify({ id: selectedListId, stock: symbol, add: true })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Failed to add stock to list' }));
+          throw new Error(err.error || err.details || 'Failed to add stock to list');
+        }
+
+        // Refresh saved lists so UI reflects server state
+        await loadSavedLists();
+      } catch (err) {
+        console.error('Add stock to list error:', err);
+        toast.error(err instanceof Error ? err.message : 'Failed to save to list');
+      }
     }
-  }, [selectedStocks]);
+  }, [selectedStocks, selectedListId, loadSavedLists, toast]);
 
   // Remove stock from analysis
   const removeStock = useCallback((symbol: string) => {

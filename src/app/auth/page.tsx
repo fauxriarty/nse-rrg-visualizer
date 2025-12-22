@@ -20,6 +20,15 @@ export default function AuthPage() {
     if (userId) router.replace('/');
   }, [router]);
 
+  // Prevent page scroll while on the auth page (restore on unmount)
+  useEffect(() => {
+    const prev = typeof document !== 'undefined' ? document.body.style.overflow : '';
+    if (typeof document !== 'undefined') document.body.style.overflow = 'hidden';
+    return () => {
+      if (typeof document !== 'undefined') document.body.style.overflow = prev;
+    };
+  }, []);
+
   const handleAuth = async () => {
     setLoading(true);
     setError(null);
@@ -67,12 +76,12 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-6">
-        <h1 className="text-xl font-bold text-white mb-4">Welcome</h1>
-        <p className="text-slate-400 text-sm mb-6">Login or Sign up to save your lists and defaults.</p>
+    <main className="h-screen bg-slate-950 text-slate-200 flex items-center justify-center p-4">
+      <div className="w-full max-w-md sm:max-w-sm bg-slate-900 border border-slate-800 rounded-2xl shadow-xl p-4 sm:p-6">
+        <h1 className="text-lg sm:text-xl font-bold text-white mb-3">Welcome</h1>
+        <p className="text-slate-400 text-xs sm:text-sm mb-5">Login or Sign up to save your lists and defaults.</p>
 
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4">
           <button
             className={`px-3 py-1.5 rounded text-xs font-semibold ${mode==='login'?'bg-blue-600 text-white':'text-slate-400 border border-slate-700'}`}
             onClick={() => setMode('login')}
@@ -83,10 +92,10 @@ export default function AuthPage() {
           >Sign Up</button>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <label className="text-xs text-slate-400">Username</label>
           <input
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm sm:text-sm"
             value={username}
             onChange={(e)=>setUsername(e.target.value)}
             placeholder="yourname"
@@ -94,7 +103,7 @@ export default function AuthPage() {
           <label className="text-xs text-slate-400">Password</label>
           <input
             type="password"
-            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm sm:text-sm"
             value={password}
             onChange={(e)=>setPassword(e.target.value)}
             placeholder="••••••••"
@@ -104,7 +113,7 @@ export default function AuthPage() {
               <label className="text-xs text-slate-400">Confirm Password</label>
               <input
                 type="password"
-                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm"
+                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm sm:text-sm"
                 value={passwordConfirm}
                 onChange={(e)=>setPasswordConfirm(e.target.value)}
                 placeholder="Confirm password"
