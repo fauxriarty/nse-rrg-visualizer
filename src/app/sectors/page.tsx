@@ -39,7 +39,6 @@ function SectorsPageContent() {
   const [hoveredStock, setHoveredStock] = useState<string | null>(null);
   const [showStockChart, setShowStockChart] = useState(false);
   const displayedStocks = useMemo(() => data.filter((s: any) => selectedStocks.has(s.name)), [data, selectedStocks]);
-  const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // Configuration State
   const [selectedSector, setSelectedSector] = useState(() => {
@@ -51,6 +50,8 @@ function SectorsPageContent() {
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
   const [benchmark, setBenchmark] = useState<'sector' | 'nifty'>('sector'); // 'sector' or 'nifty'
   const [defaultsLoaded, setDefaultsLoaded] = useState(false);
+  
+  const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // Initialize sector name when selected sector changes
   useEffect(() => {
