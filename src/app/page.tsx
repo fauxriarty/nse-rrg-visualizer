@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
+import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
@@ -96,6 +97,8 @@ export default function Home() {
     new Set(SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50').map(s => s.name))
   );
   const [showSectorDropdown, setShowSectorDropdown] = useState(false);
+  const displayedSectors = useMemo(() => data.filter((s: any) => selectedSectors.has(s.name)), [data, selectedSectors]);
+  const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // --- DYNAMIC OPTIONS ---
   const rsOptions = useMemo(() => {
@@ -303,6 +306,18 @@ export default function Home() {
           <RRGChart data={data} interval={interval} config={config} enableSectorNavigation={true} selectedSectorNames={selectedSectors} />
         )}
       </div>
+
+      {selectedSectors.size > 0 && (
+        <div className="max-w-7xl mx-auto mb-12">
+          <MovementHighlights 
+            data={displayedSectors as any}
+            subjectLabel="sector"
+            title="Quadrant jumps across selected sectors"
+            intervalLabel={intervalLabel}
+            backtestLabel={backtestDate || 'Live'}
+          />
+        </div>
+      )}
 
       {/* --- UNDERSTANDING CONFIGURATION PARAMETERS --- */}
       <div className="max-w-7xl mx-auto mb-8">

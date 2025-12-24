@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import RRGChart from '@/components/RRGChart';
 import StockPriceChart from '@/components/StockPriceChart';
+import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, History, Target, Search, X, Plus, Save, Trash2
@@ -52,6 +53,7 @@ export default function CustomAnalysisPage() {
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
   const [defaultsLoaded, setDefaultsLoaded] = useState(false);
+  const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // Load defaults for user
   useEffect(() => {
@@ -717,6 +719,18 @@ export default function CustomAnalysisPage() {
           </div>
         )}
       </div>
+
+      {selectedStocks.length > 0 && (
+        <div className="max-w-7xl mx-auto mb-12">
+          <MovementHighlights 
+            data={data as any}
+            subjectLabel="stock"
+            title="Quadrant jumps in your custom list"
+            intervalLabel={intervalLabel}
+            backtestLabel={backtestDate || 'Live'}
+          />
+        </div>
+      )}
 
     </main>
   );

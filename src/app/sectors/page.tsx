@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RRGChart from '@/components/RRGChart';
 import StockPriceChart from '@/components/StockPriceChart';
+import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
   Clock, SlidersHorizontal, History, TrendingUp
@@ -37,6 +38,8 @@ function SectorsPageContent() {
   const [showStockDropdown, setShowStockDropdown] = useState(false);
   const [hoveredStock, setHoveredStock] = useState<string | null>(null);
   const [showStockChart, setShowStockChart] = useState(false);
+  const displayedStocks = useMemo(() => data.filter((s: any) => selectedStocks.has(s.name)), [data, selectedStocks]);
+  const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // Configuration State
   const [selectedSector, setSelectedSector] = useState(() => {
@@ -400,6 +403,18 @@ function SectorsPageContent() {
           </>
         )}
       </div>
+
+      {selectedStocks.size > 0 && (
+        <div className="max-w-7xl mx-auto mb-12">
+          <MovementHighlights 
+            data={displayedStocks as any} 
+            subjectLabel="stock" 
+            title={`Quadrant jumps in ${sectorName || 'sector stocks'}`}
+            intervalLabel={intervalLabel}
+            backtestLabel={backtestDate || 'Live'}
+          />
+        </div>
+      )}
 
     </main>
   );
