@@ -84,3 +84,50 @@ export const calculateRRGData = (
 
   return validPoints;
 };
+
+// 3. Calculate weighted index price for a custom list of stocks
+// Uses equal-weighted methodology (simple average) similar to how sector indexes work
+export const calculateCustomListIndexPrice = (
+  stockPricesArray: number[][],
+  dateIndex: number
+): number | null => {
+  if (!stockPricesArray || stockPricesArray.length === 0) return null;
+  
+  // Get price at the specified date index for each stock
+  const validPrices = stockPricesArray
+    .map(prices => prices[dateIndex])
+    .filter(price => price !== null && price !== undefined && !isNaN(price)) as number[];
+  
+  if (validPrices.length === 0) return null;
+  
+  // Equal-weighted average (simple average of all stocks)
+  const sum = validPrices.reduce((a, b) => a + b, 0);
+  return sum / validPrices.length;
+};
+
+// 4. Calculate RRG data for stocks in a custom list against a calculated list index
+export const calculateCustomListRRGData = (
+  stockPricesArrays: number[][],
+  benchmarkPrices: number[],
+  rsWindow: number,
+  rocWindow: number
+): { indexPrices: (number | null)[]; rrgDataPoints: any[] } => {
+  // Calculate index prices for each date
+  const indexPrices: (number | null)[] = [];
+  const minLength = Math.min(
+    Math.min(...stockPricesArrays.map(arr => arr.length)),
+    benchmarkPrices.length
+  );
+  
+  if (minLength < 5) return { indexPrices: [], rrgDataPoints: [] };
+  
+  for (let i = 0; i < minLength; i++) {
+    const indexPrice = calculateCustomListIndexPrice(stockPricesArrays, i);
+    indexPrices.push(indexPrice);
+  }
+  
+  // Use the calculated index prices as the "benchmark" for RRG calculation
+  const rrgDataPoints = calculateRRGData(indexPrices.filter(p => p !== null) as number[], benchmarkPrices.slice(-minLength), rsWindow, rocWindow);
+  
+  return { indexPrices, rrgDataPoints };
+};

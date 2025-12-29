@@ -19,16 +19,15 @@ const INTERVAL_OPTIONS = [
 export default function CustomAnalysisPage() {
   const toast = useToast();
   const [userId, setUserId] = useState<string | null>(null);
-  const [mode, setMode] = useState<'overview' | 'detail'>('detail');
+  const [mode, setMode] = useState<'overview' | 'detail'>('detail'); // 'overview': All custom lists | 'detail': Single list stocks
+    useEffect(() => {
+      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+      setUserId(uid);
+      if (!uid) {
+        window.location.href = '/auth';
+      }
+    }, []);
   
-  useEffect(() => {
-    const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-    setUserId(uid);
-    if (!uid) {
-      window.location.href = '/auth';
-    }
-  }, []);
-
   // Shared state
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -46,9 +45,9 @@ export default function CustomAnalysisPage() {
   const [savingList, setSavingList] = useState(false);
   const [showSavedDropdown, setShowSavedDropdown] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [benchmark, setBenchmark] = useState<'custom' | 'nifty'>('nifty');
+  const [benchmark, setBenchmark] = useState<'custom' | 'nifty'>('nifty'); // Benchmark for detail view
   
-  // Search state
+  // Search state (detail mode only)
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -125,7 +124,7 @@ export default function CustomAnalysisPage() {
     }
   }, []);
 
-  // Dynamic Options
+  // Dynamic Options (same as main page)
   const rsOptions = useMemo(() => {
     if (interval === '1mo') {
       return [
@@ -220,50 +219,79 @@ export default function CustomAnalysisPage() {
     loadSavedLists();
   }, [loadSavedLists]);
 
-  // Fetch data for overview mode (all custom lists)
-  const fetchOverviewData = useCallback(async () => {
-    if (mode !== 'overview') return;
-    
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ 
-        interval, 
-        rsWindow, 
-        rocWindow,
-      });
-      
-      if (backtestDate) {
-        params.append('date', backtestDate);
-      }
-
-      const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
-      const res = await fetch(`/api/custom-lists-index?${params.toString()}`, {
-        headers: uid ? { 'x-user-id': uid } : {}
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error', details: 'No error details available' }));
-        const errorMessage = errorData.error || errorData.details || `HTTP ${res.status}: ${res.statusText}`;
-        throw new Error(errorMessage);
-      }
-      const json = await res.json();
-      setError(null);
-      console.log('Overview data received:', json);
-      if (json.lists) setData(json.lists);
-      if (json.config) setConfig(json.config);
-      console.log('Data set to:', json.lists);
-    } catch (err: any) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch data';
-      console.error('Fetch error:', err);
-      setError(errorMsg);
-      setData([]);
-    } finally {
-      setLoading(false);
+  // Search stocks
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
     }
-  }, [mode, interval, rsWindow, rocWindow, backtestDate]);
 
-  // Fetch data for detail mode (single list stocks)
-  const fetchDetailData = useCallback(async () => {
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const results = await res.json();
+        setSearchResults(results);
+        setShowResults(true);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, handleSearch]);
+
+  // Add stock to analysis
+  const addStock = useCallback(async (symbol: string) => {
+    if (selectedStocks.includes(symbol)) return;
+    // Optimistically add to UI
+    setSelectedStocks((prev) => [...prev, symbol]);
+    setSearchQuery('');
+    setShowResults(false);
+
+    // If a saved list is selected, persist this addition to that list
+    if (selectedListId) {
+      try {
+        const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+        if (!uid) throw new Error('You must be logged in to modify saved lists');
+
+        const res = await fetch('/api/custom-lists', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+          body: JSON.stringify({ id: selectedListId, stock: symbol, add: true })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Failed to add stock to list' }));
+          throw new Error(err.error || err.details || 'Failed to add stock to list');
+        }
+
+        // Refresh saved lists so UI reflects server state
+        await loadSavedLists();
+      } catch (err) {
+        console.error('Add stock to list error:', err);
+        toast.error(err instanceof Error ? err.message : 'Failed to save to list');
+      }
+    }
+  }, [selectedStocks, selectedListId, loadSavedLists, toast]);
+
+  // Remove stock from analysis
+  const removeStock = useCallback((symbol: string) => {
+    setSelectedStocks(selectedStocks.filter(s => s !== symbol));
+    setSelectedListId('');
+  }, [selectedStocks]);
+
+  // Fetch data for selected stocks
+  const fetchData = useCallback(async () => {
     if (selectedStocks.length === 0) {
       setData([]);
       setError(null);
@@ -278,7 +306,6 @@ export default function CustomAnalysisPage() {
         interval, 
         rsWindow, 
         rocWindow,
-        benchmark
       });
       
       if (backtestDate) {
@@ -306,85 +333,11 @@ export default function CustomAnalysisPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate, benchmark]);
+  }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate]);
 
-  // Trigger fetches based on mode
-  useEffect(() => {
-    if (mode === 'overview') {
-      fetchOverviewData();
-    }
-  }, [mode, fetchOverviewData]);
-
-  useEffect(() => {
-    if (mode === 'detail') {
-      fetchDetailData();
-    }
-  }, [mode, fetchDetailData]);
-
-  // Handle stock search
-  const handleSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`);
-      if (res.ok) {
-        const results = await res.json();
-        setSearchResults(results);
-        setShowResults(true);
-      }
-    } catch (err) {
-      console.error('Search error:', err);
-    } finally {
-      setSearching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      handleSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, handleSearch]);
-
-  const addStock = useCallback(async (symbol: string) => {
-    if (selectedStocks.includes(symbol)) return;
-    setSelectedStocks((prev) => [...prev, symbol]);
-    setSearchQuery('');
-    setShowResults(false);
-
-    if (selectedListId) {
-      try {
-        const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
-        if (!uid) throw new Error('You must be logged in to modify saved lists');
-
-        const res = await fetch('/api/custom-lists', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
-          body: JSON.stringify({ id: selectedListId, stock: symbol, add: true })
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Failed to add stock to list' }));
-          throw new Error(err.error || err.details || 'Failed to add stock to list');
-        }
-
-        await loadSavedLists();
-      } catch (err) {
-        console.error('Add stock to list error:', err);
-        toast.error(err instanceof Error ? err.message : 'Failed to save to list');
-      }
-    }
-  }, [selectedStocks, selectedListId, loadSavedLists, toast]);
-
-  const removeStock = useCallback((symbol: string) => {
-    setSelectedStocks(selectedStocks.filter(s => s !== symbol));
-    setSelectedListId('');
-  }, [selectedStocks]);
+  useEffect(() => { 
+    fetchData(); 
+  }, [selectedStocks, interval, rsWindow, rocWindow, backtestDate]);
 
   const handleSelectSavedList = useCallback((listId: string) => {
     setSelectedListId(listId);
@@ -457,87 +410,26 @@ export default function CustomAnalysisPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
       
-      {/* MODE SELECTOR AND CONFIGURATION BAR */}
+      {/* SEARCH AND FILTERS BAR */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
           <div className="flex flex-col gap-6">
-            {/* Mode Selector */}
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center gap-3 min-w-48">
                 <div className="p-2 bg-slate-800 rounded-lg border border-slate-700">
                   <Target className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
                   <h2 className="font-bold text-base text-white">Custom Analysis</h2>
-                  <p className="text-xs text-slate-500">Analyze custom lists as sectors or individual stocks</p>
+                  <p className="text-xs text-slate-500">Search and add stocks vs NIFTY 50</p>
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setMode('overview')}
-                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                    mode === 'overview'
-                      ? 'bg-blue-600 text-white border border-blue-500 shadow-lg shadow-blue-500/10'
-                      : 'bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-500'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4" />
-                    View All Custom Lists
-                  </span>
-                </button>
-                <button
-                  onClick={() => setMode('detail')}
-                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                    mode === 'detail'
-                      ? 'bg-blue-600 text-white border border-blue-500 shadow-lg shadow-blue-500/10'
-                      : 'bg-slate-800 text-slate-200 border border-slate-700 hover:border-slate-500'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Search className="w-4 h-4" />
-                    Analyze Lists
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* Configuration */}
-            <div className="flex flex-col gap-6">
+              {/* Filters row: saved list + date + intervals + RS + ROC */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 w-full relative z-40">
-                <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
-                <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
-                <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
-                <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
-                {mode === 'detail' && (
-                  <CustomSelect 
-                    label="Benchmark" 
-                    icon={<TrendingUp className="w-3.5 h-3.5" />} 
-                    value={benchmark} 
-                    onChange={setBenchmark} 
-                    options={[
-                      { label: 'NIFTY 50', value: 'nifty' },
-                      { label: 'Custom Index', value: 'custom' }
-                    ]} 
-                  />
-                )}
-              </div>
-
-              <div className="flex items-center gap-2 sm:gap-3">
-                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
-                <button onClick={saveDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
-                <button onClick={resetDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
-              </div>
-            </div>
-
-            {/* Detail Mode Controls */}
-            {mode === 'detail' && (
-              <div className="flex flex-col gap-3">
-                {/* Saved Lists Dropdown */}
                 <div className="flex flex-col gap-1.5 w-full">
                   <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
-                    <Save className="w-3.5 h-3.5" /> Select Saved List
+                    <Save className="w-3.5 h-3.5" /> Saved Lists
                   </label>
                   <div className="relative">
                     <button
@@ -551,16 +443,6 @@ export default function CustomAnalysisPage() {
                     </button>
                     {showSavedDropdown && (
                       <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-                        <button
-                          onClick={() => { 
-                            setSelectedListId(''); 
-                            setSelectedStocks([]);
-                            setShowSavedDropdown(false); 
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm text-slate-400 hover:bg-slate-800 border-b border-slate-800/50"
-                        >
-                          No Saved List (Manual Selection)
-                        </button>
                         {savedLists.length === 0 && (
                           <div className="px-4 py-3 text-xs text-slate-500">No saved lists</div>
                         )}
@@ -570,7 +452,7 @@ export default function CustomAnalysisPage() {
                               onClick={() => { handleSelectSavedList(list.id); setShowSavedDropdown(false); }}
                               className="text-left text-sm text-slate-200 font-semibold flex-1"
                             >
-                              {list.name} <span className="text-xs text-slate-500">({list.stocks?.length || 0} stocks)</span>
+                              {list.name}
                             </button>
                             <button
                               onClick={() => requestDeleteList(list.id, list.name)}
@@ -585,128 +467,130 @@ export default function CustomAnalysisPage() {
                     )}
                   </div>
                 </div>
+                <CustomSelect label="Backtest Date" icon={<History className="w-3.5 h-3.5" />} value={backtestDate} onChange={setBacktestDate} options={[]} isDate />
+                <CustomSelect label="Interval" icon={<Calendar className="w-3.5 h-3.5" />} value={interval} onChange={setIntervalState} options={INTERVAL_OPTIONS} />
+                <CustomSelect label="RS Period" icon={<BarChart3 className="w-3.5 h-3.5" />} value={rsWindow} onChange={setRsWindow} options={rsOptions} />
+                <CustomSelect label="ROC Period" icon={<Clock className="w-3.5 h-3.5" />} value={rocWindow} onChange={setRocWindow} options={rocOptions} />
+              </div>
 
-                {/* Stock Search */}
-                <div className="relative">
-                  <div className="relative flex items-center gap-3">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        placeholder="Search stocks to add (e.g., RELIANCE, TCS, INFY)..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg pl-10 pr-10 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500"
-                      />
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                      {searching && (
-                        <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
-                      )}
-                    </div>
-                    <button
-                      onClick={() => setShowSaveModal(true)}
-                      disabled={selectedStocks.length === 0}
-                      className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border transition-all whitespace-nowrap ${
-                        selectedStocks.length === 0
-                          ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
-                          : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500 shadow-lg shadow-blue-500/10'
-                      }`}
-                      title={selectedStocks.length === 0 ? 'Add at least one stock to save' : 'Save this list'}
-                    >
-                      <Save className="w-4 h-4" />
-                      Save List
-                    </button>
+              {/* Actions row */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
+                <button onClick={saveDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
+                <button onClick={resetDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
+              </div>
+            </div>
+
+            {/* Stock Search Bar + Save */}
+            <div className="flex flex-col gap-3">
+              <div className="relative">
+                <div className="relative flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Search stocks to add (e.g., RELIANCE, TCS, INFY)..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-slate-800 text-sm text-slate-200 border border-slate-700 rounded-lg pl-10 pr-10 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all hover:border-slate-500"
+                    />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    {searching && (
+                      <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
+                    )}
                   </div>
-
-                  {showResults && searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-                      {searchResults.map((stock: any) => (
-                        <button
-                          key={stock.symbol}
-                          onClick={() => addStock(stock.symbol)}
-                          disabled={selectedStocks.includes(stock.symbol)}
-                          className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-b-0 transition-colors ${
-                            selectedStocks.includes(stock.symbol) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                          }`}
-                        >
-                          <div className="flex flex-col items-start">
-                            <span className="text-sm font-semibold text-slate-200">{stock.symbol}</span>
-                            <span className="text-xs text-slate-400">{stock.name}</span>
-                          </div>
-                          {selectedStocks.includes(stock.symbol) ? (
-                            <span className="text-xs text-slate-500">Added</span>
-                          ) : (
-                            <Plus className="w-4 h-4 text-blue-400" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setShowSaveModal(true)}
+                    disabled={selectedStocks.length === 0}
+                    className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+                      selectedStocks.length === 0
+                        ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed'
+                        : 'bg-blue-600 text-white border-blue-500 hover:bg-blue-500 shadow-lg shadow-blue-500/10'
+                    }`}
+                    title={selectedStocks.length === 0 ? 'Add at least one stock to save' : 'Save this list'}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save List
+                  </button>
                 </div>
 
-                {selectedStocks.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedStocks.map((symbol) => (
-                      <div
-                        key={symbol}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-sm text-blue-300"
+                {/* Search Results Dropdown */}
+                {showResults && searchResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                    {searchResults.map((stock: any) => (
+                      <button
+                        key={stock.symbol}
+                        onClick={() => addStock(stock.symbol)}
+                        disabled={selectedStocks.includes(stock.symbol)}
+                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-700 border-b border-slate-700/50 last:border-b-0 transition-colors ${
+                          selectedStocks.includes(stock.symbol) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                        }`}
                       >
-                        <span className="font-semibold">{symbol}</span>
-                        <button
-                          onClick={() => removeStock(symbol)}
-                          className="hover:text-red-400 transition-colors"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                        {selectedListId && (
-                          <button
-                            onClick={async () => {
-                              try {
-                                const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
-                                if (!uid) {
-                                  throw new Error('You must be logged in to delete from lists');
-                                }
-                                const res = await fetch('/api/custom-lists', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
-                                  body: JSON.stringify({ id: selectedListId, stock: symbol })
-                                });
-                                if (!res.ok) {
-                                  const err = await res.json().catch(() => ({ error: 'Failed to delete stock' }));
-                                  throw new Error(err.error || err.details || 'Failed to delete stock from list');
-                                }
-                                setSelectedStocks((prev) => prev.filter((s) => s !== symbol));
-                                await loadSavedLists();
-                              } catch (err) {
-                                console.error('Remove stock from list error:', err);
-                                alert(`Error: ${err instanceof Error ? err.message : 'Failed to delete stock'}`);
-                              }
-                            }}
-                            className="hover:text-red-400 transition-colors"
-                            title="Delete from saved list"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        <div className="flex flex-col items-start">
+                          <span className="text-sm font-semibold text-slate-200">{stock.symbol}</span>
+                          <span className="text-xs text-slate-400">{stock.name}</span>
+                        </div>
+                        {selectedStocks.includes(stock.symbol) ? (
+                          <span className="text-xs text-slate-500">Added</span>
+                        ) : (
+                          <Plus className="w-4 h-4 text-blue-400" />
                         )}
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
-            )}
 
-            {/* Overview Mode Controls */}
-            {mode === 'overview' && (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5 w-full">
-                  <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 flex items-center gap-1.5">
-                    <Save className="w-3.5 h-3.5" /> Saved Lists ({savedLists.length})
-                  </label>
-                  <p className="text-xs text-slate-400">
-                    {savedLists.length === 0 ? 'No custom lists yet. Create some in Analyze Lists mode.' : `Showing all ${savedLists.length} custom lists as sectors with equal-weighted index calculated from constituent stocks`}
-                  </p>
+              {/* Selected Stocks Pills */}
+              {selectedStocks.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedStocks.map((symbol) => (
+                    <div
+                      key={symbol}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 rounded-lg text-sm text-blue-300"
+                    >
+                      <span className="font-semibold">{symbol}</span>
+                      <button
+                        onClick={() => removeStock(symbol)}
+                        className="hover:text-red-400 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                      {selectedListId && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const uid = typeof window !== 'undefined' ? localStorage.getItem('userId') : '';
+                              if (!uid) {
+                                throw new Error('You must be logged in to delete from lists');
+                              }
+                              const res = await fetch('/api/custom-lists', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json', 'x-user-id': uid },
+                                body: JSON.stringify({ id: selectedListId, stock: symbol })
+                              });
+                              if (!res.ok) {
+                                const err = await res.json().catch(() => ({ error: 'Failed to delete stock' }));
+                                throw new Error(err.error || err.details || 'Failed to delete stock from list');
+                              }
+                              // Update saved lists state and selectedStocks
+                              setSelectedStocks((prev) => prev.filter((s) => s !== symbol));
+                              await loadSavedLists();
+                            } catch (err) {
+                              console.error('Remove stock from list error:', err);
+                              alert(`Error: ${err instanceof Error ? err.message : 'Failed to delete stock'}`);
+                            }
+                          }}
+                          className="hover:text-red-400 transition-colors"
+                          title="Delete from saved list"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -787,120 +671,62 @@ export default function CustomAnalysisPage() {
 
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">
-        {mode === 'overview' ? (
-          // Overview mode content
+        {selectedStocks.length === 0 ? (
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 border-dashed shadow-inner">
+            <Target className="w-16 h-16 text-slate-700 mb-4" />
+            <p className="text-slate-400 text-lg font-bold mb-2">No Stocks Selected</p>
+            <p className="text-slate-500 text-sm">Search and add stocks above to start analyzing</p>
+          </div>
+        ) : error ? (
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-red-950/10 border border-red-900/30 rounded-2xl shadow-inner">
+            <div className="text-red-400 text-center">
+              <p className="text-lg font-bold mb-2">Error Loading Data</p>
+              <p className="text-sm text-red-300/80">{error}</p>
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
+             <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
+            <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
+            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Analyzing Selected Stocks...</p>
+            <p className="text-slate-500 text-xs mt-2 relative z-10">
+                {backtestDate ? `Fetching history for ${backtestDate}` : 'Fetching live market data'}
+            </p>
+          </div>
+        ) : data.length > 0 ? (
           <>
-            {savedLists.length === 0 ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 border-dashed shadow-inner">
-                <Target className="w-16 h-16 text-slate-700 mb-4" />
-                <p className="text-slate-400 text-lg font-bold mb-2">No Custom Lists</p>
-                <p className="text-slate-500 text-sm">Switch to "Analyze List Stocks" to create your first custom list</p>
-              </div>
-            ) : error ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-red-950/10 border border-red-900/30 rounded-2xl shadow-inner">
-                <div className="text-red-400 text-center">
-                  <p className="text-lg font-bold mb-2">Error Loading Data</p>
-                  <p className="text-sm text-red-300/80">{error}</p>
-                </div>
-              </div>
-            ) : loading ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
-                <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
-                <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Analyzing Custom Lists...</p>
-              </div>
-            ) : data.length > 0 ? (
-              <>
-                <RRGChart 
-                  data={data} 
-                  interval={interval} 
-                  config={config} 
-                  benchmark="NIFTY 50" 
-                  enableSectorNavigation={false}
-                  onStockHover={(listName) => {
-                    setHoveredItem(listName);
-                    setShowItemChart(!!listName);
-                  }}
-                />
-              </>
-            ) : (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner">
-                <Activity className="w-12 h-12 text-slate-700 mb-4" />
-                <p className="text-slate-400 text-base font-bold mb-2">No Data Available</p>
-                <p className="text-slate-500 text-sm">Unable to fetch data for custom lists</p>
-              </div>
+            <RRGChart 
+              data={data} 
+              interval={interval} 
+              config={config} 
+              benchmark="NIFTY 50" 
+              enableSectorNavigation={false}
+              onStockHover={(stockName) => {
+                setHoveredItem(stockName);
+                setShowItemChart(!!stockName);
+              }}
+            />
+            {hoveredItem && (
+              <StockPriceChart 
+                stockName={hoveredItem} 
+                isOpen={showItemChart} 
+                onClose={() => {
+                  setShowItemChart(false);
+                  setHoveredItem(null);
+                }}
+              />
             )}
           </>
         ) : (
-          // Detail mode content
-          <>
-            {selectedStocks.length === 0 ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 border-dashed shadow-inner">
-                <Target className="w-16 h-16 text-slate-700 mb-4" />
-                <p className="text-slate-400 text-lg font-bold mb-2">No List Selected</p>
-                <p className="text-slate-500 text-sm">Select a saved list or search for stocks to start analyzing</p>
-              </div>
-            ) : error ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-red-950/10 border border-red-900/30 rounded-2xl shadow-inner">
-                <div className="text-red-400 text-center">
-                  <p className="text-lg font-bold mb-2">Error Loading Data</p>
-                  <p className="text-sm text-red-300/80">{error}</p>
-                </div>
-              </div>
-            ) : loading ? (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
-                <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
-                <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
-                <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Analyzing Selected Stocks...</p>
-                <p className="text-slate-500 text-xs mt-2 relative z-10">
-                  {backtestDate ? `Fetching history for ${backtestDate}` : 'Fetching live market data'}
-                </p>
-              </div>
-            ) : data.length > 0 ? (
-              <>
-                <RRGChart 
-                  data={data} 
-                  interval={interval} 
-                  config={config} 
-                  benchmark={benchmark === 'custom' ? 'Custom Index' : 'NIFTY 50'} 
-                  enableSectorNavigation={false}
-                  onStockHover={(stockName) => {
-                    setHoveredItem(stockName);
-                    setShowItemChart(!!stockName);
-                  }}
-                />
-                {hoveredItem && (
-                  <StockPriceChart 
-                    stockName={hoveredItem} 
-                    isOpen={showItemChart} 
-                    onClose={() => {
-                      setShowItemChart(false);
-                      setHoveredItem(null);
-                    }}
-                  />
-                )}
-              </>
-            ) : (
-              <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner">
-                <Activity className="w-12 h-12 text-slate-700 mb-4" />
-                <p className="text-slate-400 text-base font-bold mb-2">No Data Available</p>
-                <p className="text-slate-500 text-sm">Unable to fetch data for selected stocks</p>
-              </div>
-            )}
-          </>
+          <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner">
+            <Activity className="w-12 h-12 text-slate-700 mb-4" />
+            <p className="text-slate-400 text-base font-bold mb-2">No Data Available</p>
+            <p className="text-slate-500 text-sm">Unable to fetch data for selected stocks</p>
+          </div>
         )}
       </div>
 
-      {mode === 'overview' && data.length > 0 && (
-        <div className="max-w-7xl mx-auto mb-12">
-          <MovementHighlights 
-            data={data as any}
-            subjectLabel="custom list"
-          />
-        </div>
-      )}
-
-      {mode === 'detail' && selectedStocks.length > 0 && (
+      {selectedStocks.length > 0 && (
         <div className="max-w-7xl mx-auto mb-12">
           <MovementHighlights 
             data={data as any}
@@ -908,6 +734,7 @@ export default function CustomAnalysisPage() {
           />
         </div>
       )}
+
     </main>
   );
 }
