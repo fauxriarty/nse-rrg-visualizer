@@ -41,17 +41,20 @@ export const detectQuadrantJumps = (items: RRGEntity[]): QuadrantJump[] => {
     const { head, tail = [] } = item;
     if (!head || tail.length < 2) return;
 
-    const previous = tail[tail.length - 2];
-    const current = head;
-    if (!previous || !current) return;
+    // Only compare the immediate previous day (tail[-2]) to today (tail[-1])
+    // This ensures we only detect quadrant changes that happened between these two specific days
+    const previousDay = tail[tail.length - 2];
+    const currentDay = tail[tail.length - 1];
+    
+    if (!previousDay || !currentDay) return;
 
-    const from = getQuadrant(previous);
-    const to = getQuadrant(current);
+    const from = getQuadrant(previousDay);
+    const to = getQuadrant(currentDay);
 
     if (from === to) return;
 
-    const deltaX = current.x - previous.x;
-    const deltaY = current.y - previous.y;
+    const deltaX = currentDay.x - previousDay.x;
+    const deltaY = currentDay.y - previousDay.y;
     const magnitude = Math.hypot(deltaX, deltaY);
 
     jumps.push({
@@ -61,8 +64,8 @@ export const detectQuadrantJumps = (items: RRGEntity[]): QuadrantJump[] => {
       deltaX,
       deltaY,
       magnitude,
-      previous,
-      current,
+      previous: previousDay,
+      current: currentDay,
     });
   });
 

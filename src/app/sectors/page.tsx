@@ -410,9 +410,6 @@ function SectorsPageContent() {
           <MovementHighlights 
             data={displayedStocks as any} 
             subjectLabel="stock" 
-            title={`Quadrant jumps in ${sectorName || 'sector stocks'}`}
-            intervalLabel={intervalLabel}
-            backtestLabel={backtestDate || 'Live'}
           />
         </div>
       )}

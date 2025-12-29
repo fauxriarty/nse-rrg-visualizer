@@ -142,14 +142,15 @@ export async function GET(request: NextRequest) {
         return null;
       }
 
-      const trailLength = rsWindow;
+      // Always include at least last 2 points for day-over-day comparison, regardless of rsWindow
+      const tailLength = Math.max(2, rsWindow);
 
       console.log(`[API] Successfully processed ${ticker}`);
       return {
         name: symbol,
         symbol: ticker,
         head: fullHistory[fullHistory.length - 1],
-        tail: fullHistory.slice(-trailLength)
+        tail: fullHistory.slice(-tailLength)
       };
     }).filter(r => r !== null);
 

@@ -725,9 +725,6 @@ export default function CustomAnalysisPage() {
           <MovementHighlights 
             data={data as any}
             subjectLabel="stock"
-            title="Quadrant jumps in your custom list"
-            intervalLabel={intervalLabel}
-            backtestLabel={backtestDate || 'Live'}
           />
         </div>
       )}

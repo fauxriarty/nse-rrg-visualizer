@@ -89,13 +89,13 @@ export async function GET(request: Request) {
 
         if (!fullHistory || fullHistory.length === 0) return null;
 
-        // Show last N positions in the trail based on RS window
-        const trailLength = rsWindow;
+        // Always include at least last 2 points for day-over-day comparison, regardless of rsWindow
+        const tailLength = Math.max(2, rsWindow);
 
         return {
           name: sector.name,
           head: fullHistory[fullHistory.length - 1], 
-          tail: fullHistory.slice(-trailLength)
+          tail: fullHistory.slice(-tailLength)
         };
     }).filter(r => r !== null);
 

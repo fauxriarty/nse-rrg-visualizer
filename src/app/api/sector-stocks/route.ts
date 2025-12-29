@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     const dateParam = searchParams.get('date');
     const benchmarkParam = searchParams.get('benchmark') || 'sector'; // 'sector' or 'nifty'
 
+    console.log(`[API] Received request - sector: ${sectorSymbol}, interval: ${interval}, rsWindow: ${rsWindow}, rocWindow: ${rocWindow}, dateParam: ${dateParam}`);
+
     // Get sector info
     const sectorInfo = SECTOR_CONSTITUENTS[sectorSymbol];
     if (!sectorInfo) {
@@ -124,14 +126,16 @@ export async function GET(request: NextRequest) {
         return null;
       }
 
-      const trailLength = rsWindow;
+      // Always include at least last 2 points for day-over-day comparison, regardless of rsWindow
+      const tailLength = Math.max(2, rsWindow);
+      const tail = fullHistory.slice(-tailLength);
 
-      console.log(`[API] Successfully processed ${stock}`);
+      console.log(`[API] Successfully processed ${stock}, fullHistory length: ${fullHistory.length}, tail length: ${tail.length}, tail[-2]: {x: ${tail[tail.length - 2]?.x}, y: ${tail[tail.length - 2]?.y}}, tail[-1]: {x: ${tail[tail.length - 1]?.x}, y: ${tail[tail.length - 1]?.y}}`);
       return {
         name: stock.replace('.NS', ''),
         symbol: stock,
         head: fullHistory[fullHistory.length - 1],
-        tail: fullHistory.slice(-trailLength)
+        tail: tail
       };
     }).filter(r => r !== null);
 

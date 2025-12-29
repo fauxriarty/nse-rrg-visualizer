@@ -312,9 +312,6 @@ export default function Home() {
           <MovementHighlights 
             data={displayedSectors as any}
             subjectLabel="sector"
-            title="Quadrant jumps across selected sectors"
-            intervalLabel={intervalLabel}
-            backtestLabel={backtestDate || 'Live'}
           />
         </div>
       )}

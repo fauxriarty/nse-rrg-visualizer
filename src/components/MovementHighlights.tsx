@@ -32,9 +32,9 @@ export default function MovementHighlights({ data, title = 'Noteworthy Movements
             <Sparkles className="w-4 h-4 text-indigo-300" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">{title}</h3>
+            <h3 className="text-sm font-semibold text-white">Day-over-Day Quadrant Changes</h3>
             <p className="text-[11px] text-slate-400">
-              Quadrant jumps between the two most recent points (interval: {intervalLabel}, snapshot: {backtestLabel})
+              Changes from previous trading day to today (independent of interval setting)
             </p>
           </div>
         </div>
@@ -47,7 +47,7 @@ export default function MovementHighlights({ data, title = 'Noteworthy Movements
 
       {jumps.length === 0 ? (
         <div className="text-xs text-slate-400 bg-slate-950/60 border border-dashed border-slate-800 rounded-xl px-3 py-3">
-          No recent quadrant changes for the selected {subjectLabel}s.
+          No quadrant changes from previous trading day for the selected {subjectLabel}s.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
