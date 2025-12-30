@@ -123,7 +123,7 @@ export default function StickyNavbar() {
                   <span className="sm:hidden text-xs font-semibold max-w-16 truncate">{username}</span>
                   <button
                     onClick={handleLogout}
-                    className="ml-1 p-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors flex-shrink-0"
+                    className="ml-1 p-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors shrink-0"
                     title="Logout"
                   >
                     <LogOut className="w-4 h-4" />

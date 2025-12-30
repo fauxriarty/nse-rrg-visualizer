@@ -22,7 +22,14 @@ const quadrantStyles: Record<Quadrant, string> = {
 const formatDelta = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
 
 export default function MovementHighlights({ data, title = 'Noteworthy Movements', subjectLabel = 'item', intervalLabel = 'selected interval', backtestLabel = 'current snapshot' }: MovementHighlightsProps) {
-  const jumps = useMemo(() => detectQuadrantJumps(data), [data]);
+  const jumps = useMemo(() => {
+    const detected = detectQuadrantJumps(data);
+    console.log('[MovementHighlights] Data items:', data.length, 'Detected jumps:', detected.length);
+    if (detected.length > 0) {
+      console.log('[MovementHighlights] Jumps:', detected);
+    }
+    return detected;
+  }, [data]);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">

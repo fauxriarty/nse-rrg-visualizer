@@ -6,10 +6,11 @@ import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
-  BookOpen, Calculator, Database, Server, Sigma, History, X
+  BookOpen, Calculator, Database, Server, Sigma, History, X, Play, Pause
 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 import { useToast } from '@/components/Toast';
+import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 // --- CONSTANTS ---
 const INTERVAL_OPTIONS = [
@@ -30,6 +31,8 @@ export default function Home() {
   const [rocWindow, setRocWindow] = useState('14');
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
   const [defaultsLoaded, setDefaultsLoaded] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState(5); // minutes
   const OVERVIEW_SECTORS = useMemo(() => SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50'), []);
 
   useEffect(() => {
@@ -97,7 +100,11 @@ export default function Home() {
     new Set(SECTOR_INDICES.filter(s => s.name !== 'NIFTY 50').map(s => s.name))
   );
   const [showSectorDropdown, setShowSectorDropdown] = useState(false);
-  const displayedSectors = useMemo(() => data.filter((s: any) => selectedSectors.has(s.name)), [data, selectedSectors]);
+  const displayedSectors = useMemo(() => {
+    const filtered = data.filter((s: any) => selectedSectors.has(s.name));
+    console.log('[HomePage] displayedSectors:', filtered.length, 'from', data.length, 'data items, selectedSectors:', selectedSectors.size);
+    return filtered;
+  }, [data, selectedSectors]);
   const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
   // --- DYNAMIC OPTIONS ---
@@ -202,6 +209,17 @@ export default function Home() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Auto-refresh hook - disabled when backtesting
+  const isBacktesting = backtestDate !== new Date().toISOString().split('T')[0];
+  const memoizedFetchData = useCallback(() => fetchData(), [fetchData]);
+  const { lastRefreshTime, nextRefreshIn } = useAutoRefresh({
+    onRefresh: memoizedFetchData,
+    enabled: autoRefreshEnabled && !isBacktesting,
+    intervalSeconds: autoRefreshInterval * 60,
+    shouldSkipBacktest: true,
+    isBacktesting
+  });
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-200 font-sans p-4 sm:p-6 md:p-8 pb-20">
       
@@ -286,6 +304,54 @@ export default function Home() {
               <label className="text-[9px] sm:text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
               <button onClick={saveDefaults} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
               <button onClick={resetDefaults} className="px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
+              
+              {/* Auto-refresh section */}
+              <div className="ml-auto flex items-center gap-2 sm:gap-3">
+                <button
+                  onClick={() => {
+                    console.log('[HomePage] Auto-refresh button clicked, current state:', autoRefreshEnabled);
+                    setAutoRefreshEnabled(!autoRefreshEnabled);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all border ${
+                    autoRefreshEnabled && !isBacktesting
+                      ? 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40 hover:border-emerald-500'
+                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                  }`}
+                  title={isBacktesting ? 'Auto-refresh disabled while backtesting' : 'Toggle auto-refresh'}
+                  disabled={isBacktesting}
+                >
+                  {autoRefreshEnabled && !isBacktesting ? (
+                    <>
+                      <Pause className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Refreshing</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Start Refresh</span>
+                    </>
+                  )}
+                </button>
+                
+                {autoRefreshEnabled && !isBacktesting && (
+                  <>
+                    <select
+                      value={autoRefreshInterval}
+                      onChange={(e) => setAutoRefreshInterval(parseInt(e.target.value))}
+                      className="px-2 sm:px-3 py-1.5 sm:py-2 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition cursor-pointer"
+                    >
+                      <option value={1}>1m</option>
+                      <option value={5}>5m</option>
+                      <option value={10}>10m</option>
+                      <option value={15}>15m</option>
+                    </select>
+                    <div className="text-[9px] text-slate-400 whitespace-nowrap">
+                      {lastRefreshTime && <div>Last: {lastRefreshTime.toLocaleTimeString()}</div>}
+                      <div>Next: {Math.ceil(nextRefreshIn / 60)}m {nextRefreshIn % 60}s</div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
