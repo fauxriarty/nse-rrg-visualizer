@@ -5,10 +5,10 @@ import { getChartQuotesWithFallback } from '@/lib/yfCache';
 import { logger } from '@/lib/logger';
 
 // Retry logic with cache
-async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', retries = 2): Promise<any[]> {
+async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', forceRefresh: boolean = false, retries = 2): Promise<any[]> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval);
+      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval, { forceRefresh });
       return result || [];
     } catch (error: any) {
       if (i === retries) throw error;
@@ -17,7 +17,6 @@ async function fetchWithRetry(symbol: string, period1: Date, period2: Date, inte
   }
   return [];
 }
-
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,6 +27,7 @@ export async function GET(request: NextRequest) {
     const rocWindow = parseInt(searchParams.get('rocWindow') || '14');
     const dateParam = searchParams.get('date');
     const benchmarkParam = searchParams.get('benchmark') || 'sector';
+    const refreshParam = searchParams.get('refresh') === 'true';
 
     const sectorInfo = SECTOR_CONSTITUENTS[sectorSymbol];
     if (!sectorInfo) {
@@ -48,8 +48,8 @@ export async function GET(request: NextRequest) {
     const benchmarkSymbol = benchmarkParam === 'nifty' ? '^NSEI' : sectorSymbol;
     const benchmarkName = benchmarkParam === 'nifty' ? 'NIFTY 50' : sectorInfo.name;
 
-    logger.info(`Fetching benchmark: ${benchmarkSymbol}`);
-    let benchmarkData = await fetchWithRetry(benchmarkSymbol, startDate, endDate, interval);
+    logger.info(`Sector-Stocks API: sector=${sectorInfo.name}, refresh=${refreshParam}`);
+    let benchmarkData = await fetchWithRetry(benchmarkSymbol, startDate, endDate, interval, refreshParam);
     
     if (!benchmarkData || benchmarkData.length === 0) {
       throw new Error(`Failed to fetch benchmark data for ${benchmarkSymbol}`);
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     for (let i = 0; i < sectorInfo.stocks.length; i += batchSize) {
       const batch = sectorInfo.stocks.slice(i, i + batchSize);
       const batchResults = await Promise.allSettled(
-        batch.map(stock => fetchWithRetry(stock, startDate, endDate, interval))
+        batch.map(stock => fetchWithRetry(stock, startDate, endDate, interval, refreshParam))
       );
       stocksData.push(...batchResults);
       
@@ -119,13 +119,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       config: { interval, rsWindow, rocWindow, backtestDate: dateParam || 'Live' },
+      cacheHit: !refreshParam,
       sector: sectorInfo.name,
       sectorSymbol,
       stocks: results
     });
 
   } catch (error: any) {
-    logger.error('Sector stocks API error:', error);
+    logger.error('Sector stocks API error:', error.message);
     return NextResponse.json({ 
       error: error.message || 'Internal server error'
     }, { status: 500 });

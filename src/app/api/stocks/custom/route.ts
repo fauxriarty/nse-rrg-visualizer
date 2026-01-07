@@ -6,10 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import { parse } from 'csv-parse/sync';
 
-async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', retries = 2): Promise<any[]> {
+async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', forceRefresh: boolean = false, retries = 2): Promise<any[]> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval);
+      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval, { forceRefresh });
       return result || [];
     } catch (error: any) {
       if (i === retries) throw error;
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const rsWindow = parseInt(searchParams.get('rsWindow') || '14');
     const rocWindow = parseInt(searchParams.get('rocWindow') || '14');
     const dateParam = searchParams.get('date');
+    const refreshParam = searchParams.get('refresh') === 'true';
 
     if (!stocksParam) {
       return NextResponse.json({ error: 'No stocks specified' }, { status: 400 });
@@ -63,8 +64,8 @@ export async function GET(request: NextRequest) {
     }
 
     const benchmarkSymbol = '^NSEI';
-    logger.info(`Fetching benchmark: ${benchmarkSymbol}`);
-    let benchmarkData = await fetchWithRetry(benchmarkSymbol, startDate, endDate, interval);
+    logger.info(`Custom Stocks API: ${stockTickers.length} stocks, refresh=${refreshParam}`);
+    let benchmarkData = await fetchWithRetry(benchmarkSymbol, startDate, endDate, interval, refreshParam);
     
     if (!benchmarkData || benchmarkData.length === 0) {
       throw new Error(`Failed to fetch benchmark data`);
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
     for (let i = 0; i < stockTickers.length; i += batchSize) {
       const batch = stockTickers.slice(i, i + batchSize);
       const batchResults = await Promise.allSettled(
-        batch.map(ticker => fetchWithRetry(ticker, startDate, endDate, interval))
+        batch.map(ticker => fetchWithRetry(ticker, startDate, endDate, interval, refreshParam))
       );
       stocksData.push(...batchResults);
       
@@ -132,12 +133,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       config: { interval, rsWindow, rocWindow, backtestDate: dateParam || 'Live' },
+      cacheHit: !refreshParam,
       benchmark: 'NIFTY 50',
       stocks: results
     });
 
   } catch (error: any) {
-    logger.error('Custom stocks API error:', error);
+    logger.error('Custom stocks API error:', error.message);
     return NextResponse.json({ 
       error: error.message || 'Internal server error'
     }, { status: 500 });

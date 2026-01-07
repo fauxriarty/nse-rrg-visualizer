@@ -6,10 +6,10 @@ import { logger } from '@/lib/logger';
 
 const BENCHMARK = '^NSEI';
 
-async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', retries = 2): Promise<any[]> {
+async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', forceRefresh: boolean = false, retries = 2): Promise<any[]> {
   for (let i = 0; i <= retries; i++) {
     try {
-      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval);
+      const result = await getChartQuotesWithFallback(symbol, period1, period2, interval, { forceRefresh });
       return result || [];
     } catch (error: any) {
       if (i === retries) throw error;
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const rsWindow = parseInt(searchParams.get('rsWindow') || '14');
     const rocWindow = parseInt(searchParams.get('rocWindow') || '14');
     const dateParam = searchParams.get('date');
+    const refreshParam = searchParams.get('refresh') === 'true';
 
     if (!userId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -57,7 +58,9 @@ export async function GET(request: NextRequest) {
       startDate.setFullYear(startDate.getFullYear() - 10);
     }
 
-    const benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval);
+    logger.info(`Custom Lists API: ${customLists.length} lists, refresh=${refreshParam}`);
+
+    const benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval, refreshParam);
     if (!benchmarkData || benchmarkData.length === 0) {
       throw new Error('Failed to fetch benchmark data');
     }
@@ -71,7 +74,7 @@ export async function GET(request: NextRequest) {
           );
 
           const stockResults = await Promise.allSettled(
-            stockSymbols.map((stock: string) => fetchWithRetry(stock, startDate, endDate, interval))
+            stockSymbols.map((stock: string) => fetchWithRetry(stock, startDate, endDate, interval, refreshParam))
           );
 
           const validStocksData = stockResults
@@ -144,6 +147,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ 
       lists: validResults,
+      cacheHit: !refreshParam,
       config: {
         interval,
         rsWindow,
@@ -151,7 +155,7 @@ export async function GET(request: NextRequest) {
       }
     });
   } catch (err: any) {
-    logger.error('Custom lists API error:', err);
+    logger.error('Custom lists API error:', err.message);
     return NextResponse.json({ error: 'Server error', details: err.message }, { status: 500 });
   }
 }
