@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import YahooFinance from 'yahoo-finance2'; 
 import { calculateRRGData } from '@/lib/rrgMath';
-
-const yf = new YahooFinance({
-  suppressNotices: ['ripHistorical', 'yahooSurvey']
-});
+import { getChartQuotesWithFallback } from '@/lib/yfCache';
+import { logger } from '@/lib/logger';
+import fs from 'fs';
+import path from 'path';
 
 const SECTORS = [
   { symbol: '^CNXIT', name: 'IT' },
@@ -23,28 +22,20 @@ const SECTORS = [
 
 const BENCHMARK = '^NSEI';
 
-async function fetchWithRetry(symbol: string, options: any, retries = 2): Promise<any[]> {
+async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', retries = 2): Promise<any[]> {
   for (let i = 0; i < retries; i++) {
     try {
-      const res = await yf.chart(symbol, options) as any;
-      const validQuotes = (res?.quotes || []).filter((q: any) => q.close !== null && q.close !== undefined);
-      return validQuotes; 
+      const quotes = await getChartQuotesWithFallback(symbol, period1, period2, interval);
+      return quotes.filter((q: any) => q.close !== null && q.close !== undefined);
     } catch (err) {
       if (i === retries - 1) {
-          console.warn(`Failed to fetch ${symbol}`);
-          return [];
+        logger.warn(`Failed to fetch ${symbol}`);
+        return [];
       } 
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i))); 
     }
   }
   return [];
-}
-
-// Helper: Check if a date string is today
-function isToday(dateStr: string): boolean {
-  const date = new Date(dateStr);
-  const today = new Date();
-  return date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
 }
 
 // Helper: Check if NSE market is currently open (9:15 AM - 3:30 PM IST, Mon-Fri)
@@ -68,111 +59,51 @@ function isNSEMarketOpen(): boolean {
   return minutesToday >= marketOpen && minutesToday < marketClose;
 }
 
-// Helper: Merge intraday latest close into daily data for today
-async function enhanceDataWithIntraday(dailyQuotes: any[], symbol: string, endDateStr: string): Promise<any[]> {
-  // Only enhance if we're querying for today and market might be open
-  if (!isToday(endDateStr)) {
-    return dailyQuotes;
-  }
-  
-  try {
-    // Fetch intraday data for today
-    const intradayQuotes = await fetchWithRetry(symbol, {
-      period1: endDateStr,
-      period2: endDateStr,
-      interval: '1m'
-    }, 1);
-    
-    if (intradayQuotes.length > 0) {
-      const latestIntraday = intradayQuotes[intradayQuotes.length - 1];
-      const lastDailyQuote = dailyQuotes[dailyQuotes.length - 1];
-      
-      // Check if last daily quote is from today
-      if (lastDailyQuote && isToday(lastDailyQuote.date)) {
-        // Replace today's close with latest intraday close
-        return [
-          ...dailyQuotes.slice(0, -1),
-          {
-            ...lastDailyQuote,
-            close: latestIntraday.close,
-            high: Math.max(lastDailyQuote.high || latestIntraday.close, latestIntraday.high || latestIntraday.close),
-            low: Math.min(lastDailyQuote.low || latestIntraday.close, latestIntraday.low || latestIntraday.close),
-            lastUpdate: 'intraday'
-          }
-        ];
-      }
-    }
-  } catch (err) {
-    console.warn(`Failed to fetch intraday for ${symbol}:`, err);
-  }
-  
-  return dailyQuotes;
-}
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const intervalParam = searchParams.get('interval');
     const rsWindowParam = searchParams.get('rsWindow');
     const rocWindowParam = searchParams.get('rocWindow');
-    
-    // --- 1. BACKTESTING PARAMETER ---
     const dateParam = searchParams.get('date'); 
 
     const interval: '1d' | '1wk' | '1mo' = (intervalParam === '1d' || intervalParam === '1wk' || intervalParam === '1mo') ? intervalParam : '1wk';
     const rsWindow = rsWindowParam ? Math.max(parseInt(rsWindowParam) || 14, 5) : 14; 
     const rocWindow = rocWindowParam ? Math.max(parseInt(rocWindowParam) || 1, 1) : 1;
 
-    // --- 2. TIME TRAVEL LOGIC ---
-    // If a date is provided, use it as the "End Date" (Time Travel). Otherwise use Today.
     const endDate = dateParam ? new Date(dateParam) : new Date();
-    const startDate = new Date(endDate); // Clone it to manipulate start date
+    const startDate = new Date(endDate);
     
-    // Adjust buffer based on interval relative to the CHOSEN endDate
     if (interval === '1d') startDate.setDate(endDate.getDate() - 730); 
     else if (interval === '1wk') startDate.setDate(endDate.getDate() - 1825);
     else if (interval === '1mo') startDate.setDate(endDate.getDate() - 3650);
 
-    const queryOptions = { 
-      period1: startDate.toISOString().split('T')[0],
-      period2: endDate.toISOString().split('T')[0], 
-      interval: interval
-    };
-
-    const endDateStr = endDate.toISOString().split('T')[0];
+    // Fetch benchmark
+    logger.info(`Fetching benchmark: ${BENCHMARK}`);
+    let benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval);
     
-    // Fetch all data in parallel
-    let benchmarkData = await fetchWithRetry(BENCHMARK, queryOptions);
-    let sectorsData = await Promise.all(
-      SECTORS.map(sector => fetchWithRetry(sector.symbol, queryOptions))
-    );
-    
-    // Enhance with intraday data for today (only if NOT backtesting)
-    if (!dateParam) {
-      benchmarkData = await enhanceDataWithIntraday(benchmarkData, BENCHMARK, endDateStr);
-      sectorsData = await Promise.all(
-        sectorsData.map((data, idx) => enhanceDataWithIntraday(data, SECTORS[idx].symbol, endDateStr))
-      );
+    // Fetch sectors sequentially with delay to avoid rate limits
+    const sectorsData: any[] = [];
+    for (const sector of SECTORS) {
+      const data = await fetchWithRetry(sector.symbol, startDate, endDate, interval);
+      sectorsData.push(data);
+      await new Promise(r => setTimeout(r, 300)); // 300ms delay between sectors
     }
 
     if (!benchmarkData || benchmarkData.length === 0) {
-        throw new Error("Failed to fetch benchmark data");
+      // Try loading from local data as fallback
+      logger.warn('Benchmark fetch failed, trying local data');
+      const localPath = path.join(process.cwd(), 'data', 'stocks', 'stocks_by_sector_latest.json');
+      if (fs.existsSync(localPath)) {
+        const localData = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
+        logger.info('Using local data as fallback');
+        return NextResponse.json(localData);
+      }
+      throw new Error("Failed to fetch benchmark data");
     }
 
-    // Debug: log what date range we got back
-    const lastBenchmarkQuote = benchmarkData[benchmarkData.length - 1];
-    console.log('Market-Data API Debug:', {
-      queryPeriod: { period1: queryOptions.period1, period2: queryOptions.period2 },
-      lastQuoteDate: lastBenchmarkQuote?.date,
-      lastQuoteTime: lastBenchmarkQuote?.datetime,
-      dataSource: lastBenchmarkQuote?.lastUpdate || 'daily',
-      totalQuotes: benchmarkData.length,
-      today: new Date().toISOString().split('T')[0],
-      isToday: isToday(endDateStr),
-      marketOpen: isNSEMarketOpen(),
-      daysFromToday: lastBenchmarkQuote?.date ? 
-        Math.floor((new Date().getTime() - new Date(lastBenchmarkQuote.date).getTime()) / (1000*60*60*24)) : 'N/A'
-    });
+    logger.info(`Benchmark: ${benchmarkData.length} quotes, Sectors fetched: ${sectorsData.filter(d => d.length > 0).length}/${SECTORS.length}`);
+
     const benchmarkCloses = benchmarkData.map((d: any) => d.close);
 
     const results = SECTORS.map((sector, index) => {
@@ -184,10 +115,7 @@ export async function GET(request: Request) {
 
         if (!fullHistory || fullHistory.length === 0) return null;
 
-        // head is the current/last point
         const head = fullHistory[fullHistory.length - 1];
-        
-        // tail is historical data BEFORE the head (excluding head), at least 2 points for day-over-day comparison
         const tailLength = Math.max(2, rsWindow);
         const tail = fullHistory.slice(Math.max(0, fullHistory.length - tailLength - 1), fullHistory.length - 1);
 
@@ -205,6 +133,7 @@ export async function GET(request: Request) {
     });
 
   } catch (error: any) {
+    logger.error('Market data API error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
