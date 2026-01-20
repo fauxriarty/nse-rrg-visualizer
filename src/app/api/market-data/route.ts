@@ -89,8 +89,8 @@ export async function GET(request: Request) {
         if (!fullHistory || fullHistory.length === 0) return null;
 
         const head = fullHistory[fullHistory.length - 1];
-        const tailLength = Math.max(2, rsWindow);
-        const tail = fullHistory.slice(Math.max(0, fullHistory.length - tailLength - 1), fullHistory.length - 1);
+        // Tail should include last 10 points before the head
+        const tail = fullHistory.slice(Math.max(0, fullHistory.length - 11), fullHistory.length - 1);
 
         return {
           name: sector.name,

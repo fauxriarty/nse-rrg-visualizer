@@ -7,11 +7,10 @@ import StockPriceChart from '@/components/StockPriceChart';
 import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, BarChart3, Calendar, ChevronDown, 
-  Clock, SlidersHorizontal, History, TrendingUp, Play, Pause
+  Clock, SlidersHorizontal, History, TrendingUp
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
-import { useAutoRefresh } from '@/hooks/useAutoRefresh';
 
 const INTERVAL_OPTIONS = [
   { label: 'Daily', value: '1d' },
@@ -51,8 +50,6 @@ function SectorsPageContent() {
   const [backtestDate, setBacktestDate] = useState(new Date().toISOString().split('T')[0]);
   const [benchmark, setBenchmark] = useState<'sector' | 'nifty'>('sector'); // 'sector' or 'nifty'
   const [defaultsLoaded, setDefaultsLoaded] = useState(false);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState(5); // minutes
   
   const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
 
@@ -242,17 +239,6 @@ function SectorsPageContent() {
     router.push(`/sectors?sector=${selectedSector}`, { scroll: false });
   }, [selectedSector, fetchData]);
 
-  // Auto-refresh hook - disabled when backtesting
-  const isBacktesting = backtestDate !== new Date().toISOString().split('T')[0];
-  const memoizedFetchData = useCallback(() => fetchData(), [fetchData]);
-  const { lastRefreshTime, nextRefreshIn } = useAutoRefresh({
-    onRefresh: memoizedFetchData,
-    enabled: autoRefreshEnabled && !isBacktesting,
-    intervalSeconds: autoRefreshInterval * 60,
-    shouldSkipBacktest: true,
-    isBacktesting
-  });
-
   // Initialize selected stocks to all fetched stock names when data changes
   useEffect(() => {
     if (data && data.length > 0) {
@@ -309,54 +295,6 @@ function SectorsPageContent() {
                 <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Actions:</label>
                 <button onClick={saveDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Save Settings</button>
                 <button onClick={resetDefaults} className="px-3 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition whitespace-nowrap">Reset to Defaults</button>
-                
-                {/* Auto-refresh section */}
-                <div className="ml-auto flex items-center gap-2 sm:gap-3">
-                  <button
-                    onClick={() => {
-                      console.log('[SectorsPage] Auto-refresh button clicked, current state:', autoRefreshEnabled);
-                      setAutoRefreshEnabled(!autoRefreshEnabled);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all border ${
-                      autoRefreshEnabled && !isBacktesting
-                        ? 'bg-emerald-600/20 text-emerald-300 border-emerald-600/40 hover:border-emerald-500'
-                        : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
-                    }`}
-                    title={isBacktesting ? 'Auto-refresh disabled while backtesting' : 'Toggle auto-refresh'}
-                    disabled={isBacktesting}
-                  >
-                    {autoRefreshEnabled && !isBacktesting ? (
-                      <>
-                        <Pause className="w-3 h-3 sm:w-4 sm:h-4" />
-                        <span className="hidden sm:inline">Refreshing</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3 h-3 sm:w-4 sm:h-4" />
-                        <span className="hidden sm:inline">Start Refresh</span>
-                      </>
-                    )}
-                  </button>
-                  
-                  {autoRefreshEnabled && !isBacktesting && (
-                    <>
-                      <select
-                        value={autoRefreshInterval}
-                        onChange={(e) => setAutoRefreshInterval(parseInt(e.target.value))}
-                        className="px-2 py-1.5 bg-slate-900 text-xs sm:text-sm text-slate-200 border border-slate-700 rounded-lg hover:border-slate-500 transition cursor-pointer"
-                      >
-                        <option value={1}>1m</option>
-                        <option value={5}>5m</option>
-                        <option value={10}>10m</option>
-                        <option value={15}>15m</option>
-                      </select>
-                      <div className="text-[9px] text-slate-400 whitespace-nowrap">
-                        {lastRefreshTime && <div>Last: {lastRefreshTime.toLocaleTimeString()}</div>}
-                        <div>Next: {Math.ceil(nextRefreshIn / 60)}m {nextRefreshIn % 60}s</div>
-                      </div>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
 

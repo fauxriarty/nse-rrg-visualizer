@@ -18,13 +18,10 @@ interface CacheStats {
   entries: number;
 }
 
-// Intelligent TTL based on interval and market hours
-function getOptimalTTL(interval: string): number {
-  if (interval === '1m' || interval === '5m' || interval === '15m') return 1 * 60 * 1000; // 1 min
-  if (interval === '30m' || interval === '1h') return 15 * 60 * 1000; // 15 min
-  if (interval === '1d') return 4 * 60 * 60 * 1000; // 4 hours (market stays closed after hours)
-  if (interval === '1wk') return 24 * 60 * 60 * 1000; // 1 day
-  return 7 * 24 * 60 * 60 * 1000; // 7 days for monthly
+// Unified TTL: fetch fresh data at most every 30 minutes to reduce rate limits
+const THIRTY_MINUTES = 30 * 60 * 1000;
+function getOptimalTTL(_interval: string): number {
+  return THIRTY_MINUTES;
 }
 
 // Check if NSE market is open

@@ -124,8 +124,8 @@ export async function GET(request: NextRequest) {
             return null;
           }
 
-          const tailLength = Math.max(2, rsWindow);
-          const tail = fullHistory.slice(-tailLength);
+          // Tail should include last 10 points before the head
+          const tail = fullHistory.slice(Math.max(0, fullHistory.length - 11), fullHistory.length - 1);
 
           return {
             id: list.id,

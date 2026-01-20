@@ -110,7 +110,9 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
   const trailData = useMemo(() => {
     if (!hoveredSector) return [];
     const sector = data.find(s => s.name === hoveredSector);
-    return sector ? sector.tail : [];
+    if (!sector) return [];
+    // Include the current head position as the final point in the trail
+    return [...sector.tail, sector.head];
   }, [data, hoveredSector]);
 
   const trailStart = useMemo(() => {
