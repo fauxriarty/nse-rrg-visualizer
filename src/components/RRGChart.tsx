@@ -3,12 +3,13 @@
 import {
   ComposedChart, Scatter, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ReferenceArea, Label, LabelList
 } from 'recharts';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 
 const clampZoom = (value: number) => Math.min(Math.max(value, 1), 20);
+const clampButtonZoom = (value: number) => Math.min(Math.max(value, 1), 4);
 
 interface RRGChartProps {
   data: any[];
@@ -66,12 +67,15 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
   const router = useRouter();
   const [hoveredSector, setHoveredSector] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [buttonZoom, setButtonZoom] = useState(1);
   const [zoomOrigin, setZoomOrigin] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [panActive, setPanActive] = useState(false);
+  const suppressNextClickRef = useRef(false);
+  const didPanRef = useRef(false);
 
   // Filter data for rendering if selectedSectorNames is provided
   const displayData = useMemo(() => {
@@ -154,7 +158,8 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
 
     // Base half-range with safety margin (static axes)
     const epsilon = 0.6;
-    const effectiveHalfRange = Math.ceil((reqHalfRange + epsilon) * 1.08) + 1;
+    const baseHalfRange = Math.ceil((reqHalfRange + epsilon) * 1.08) + 1;
+    const effectiveHalfRange = Math.max(2, baseHalfRange / buttonZoom);
 
     const minX = 100 - effectiveHalfRange;
     const maxX = 100 + effectiveHalfRange;
@@ -165,7 +170,7 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
     const yData = generateSmartTicks(minY, maxY, 1);
 
     return { domainX: xData.domain, ticksX: xData.ticks, domainY: yData.domain, ticksY: yData.ticks };
-  }, [data]);
+  }, [data, buttonZoom]);
 
   const [sizes, setSizes] = useState({ quadrantFontSize: 24, pointRadius: 4, labelFontSize: 10 });
 
@@ -186,33 +191,48 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
 
   // --- HANDLERS ---
   const handleBackgroundClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
     setHoveredSector(null);
     onStockHover?.(null);
   };
 
   const handlePointClick = (e: any, sectorName: string) => {
     e.stopPropagation();
-    setHoveredSector(sectorName);
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+    setHoveredSector(prev => (prev === sectorName ? prev : sectorName));
     onStockHover?.(sectorName);
-    
-    if (enableSectorNavigation) {
-      const sectorInfo = SECTOR_INDICES.find(s => s.name === sectorName);
-      if (sectorInfo) {
-        router.push(`/sectors?sector=${sectorInfo.symbol}`);
-      }
+  };
+
+  const handlePointDoubleClick = (e: any, sectorName: string) => {
+    e.stopPropagation();
+    setHoveredSector(prev => (prev === sectorName ? prev : sectorName));
+    onStockHover?.(sectorName);
+
+    if (!enableSectorNavigation) return;
+    const sectorInfo = SECTOR_INDICES.find(s => s.name === sectorName);
+    if (sectorInfo) {
+      router.push(`/sectors?sector=${sectorInfo.symbol}`);
     }
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     // Only allow pan when zoomed in
     if (zoomLevel <= 1) return;
-    // Block drag start when clicking points/labels (keeps hover/click nav behavior)
-    if ((e.target as HTMLElement).closest('circle') || (e.target as HTMLElement).closest('text')) return;
+    // Block pan start when interacting with chart points/labels
+    if ((e.target as HTMLElement).closest('[data-rrg-point="true"]')) return;
 
     setIsDragging(true);
     setDragStart({ x: e.clientX, y: e.clientY });
     setPanStart({ x: pan.x, y: pan.y });
     setPanActive(false);
+    didPanRef.current = false;
+    suppressNextClickRef.current = false;
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -222,27 +242,20 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
     const threshold = 6; // pixels before pan engages
     if (!panActive && Math.hypot(deltaX, deltaY) < threshold) return;
     setPanActive(true);
+    didPanRef.current = true;
     setPan({ x: panStart.x + deltaX, y: panStart.y + deltaY });
   };
 
   const handleMouseUp = () => {
     if (!isDragging) return;
+    suppressNextClickRef.current = didPanRef.current;
     setIsDragging(false);
     setPanActive(false);
   };
 
-  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
-    const xPercent = ((e.clientX - rect.left) / rect.width) * 100;
-    const yPercent = ((e.clientY - rect.top) / rect.height) * 100;
-    setZoomOrigin({ x: xPercent, y: yPercent });
-
-    const newZoom = clampZoom(zoomLevel * 1.3);
-    setZoomLevel(newZoom);
-  };
-
   const handleReset = () => {
     setZoomLevel(1);
+    setButtonZoom(1);
     setPan({ x: 0, y: 0 });
     setZoomOrigin({ x: 50, y: 50 });
     setIsDragging(false);
@@ -257,9 +270,8 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onDoubleClick={handleDoubleClick}
       tabIndex={-1}
-      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', outlineColor: 'transparent', cursor: zoomLevel > 1 && panActive ? 'grabbing' : zoomLevel > 1 ? 'grab' : 'default' } as React.CSSProperties}
+      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', outlineColor: 'transparent', cursor: 'default' } as React.CSSProperties}
     >
       
       {/* --- 1.  INFO BOX (Hidden unless hovering) --- */}
@@ -294,9 +306,9 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
         onClick={(e) => e.stopPropagation()} // Prevent clicking buttons from clearing selection
       >
         <button 
-          onClick={() => setZoomLevel(prev => clampZoom(prev * 1.2))}
+          onClick={() => setButtonZoom(prev => clampButtonZoom(prev * 1.08))}
           className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg shadow-lg border border-slate-700 transition-colors active:scale-95"
-          title="Zoom In"
+          title="Scale In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
@@ -308,9 +320,9 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
           <Maximize2 className="w-4 h-4" />
         </button>
         <button 
-          onClick={() => setZoomLevel(prev => (prev > 1 ? clampZoom(prev / 1.2) : 1))}
+          onClick={() => setButtonZoom(prev => (prev > 1 ? clampButtonZoom(prev / 1.08) : 1))}
           className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg shadow-lg border border-slate-700 transition-colors active:scale-95"
-          title="Zoom Out"
+          title="Scale Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
@@ -327,7 +339,10 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart 
               margin={chartMargin}
-              onMouseLeave={() => setHoveredSector(null)}
+              onMouseLeave={() => {
+                setHoveredSector(null);
+                onStockHover?.(null);
+              }}
             >
           <defs>
             <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
@@ -402,24 +417,22 @@ export default function RRGChart({ data, interval = '1wk', config, benchmark = '
               const labelXOffset = -12;
               const labelYOffset = 0;
               const textAnchor: 'start' | 'middle' | 'end' = 'end';
+              const hitRadius = Math.max(sizes.pointRadius * 3, 10);
 
               return (
                 <g 
+                  data-rrg-point="true"
                   onMouseEnter={() => {
-                    setHoveredSector(payload.name);
+                    setHoveredSector(prev => (prev === payload.name ? prev : payload.name));
                     onStockHover?.(payload.name);
                     if(onMouseEnter) onMouseEnter(props);
                   }}
-                  onMouseLeave={() => {
-                    if (hoveredSector === payload.name) {
-                      setHoveredSector(null);
-                      onStockHover?.(null);
-                    }
-                  }}
                   onClick={(e) => handlePointClick(e, payload.name)}
-                  className="cursor-pointer transition-all duration-300"
+                  onDoubleClick={(e) => handlePointDoubleClick(e, payload.name)}
+                  className="cursor-pointer"
                   style={{ opacity }}
                 >
+                  <circle cx={cx} cy={cy} r={hitRadius} fill="transparent" />
                   {isHovered && <circle cx={cx} cy={cy} r={sizes.pointRadius * 2} fill="#60a5fa" opacity={0.18} />}
                   <circle cx={cx} cy={cy} r={sizes.pointRadius} fill={isHovered ? "#60a5fa" : "#ffffff"} />
                   <text 
