@@ -6,6 +6,8 @@ import { calculateSectorMlFeatures, toFeatureVector } from '@/lib/ml/featureCalc
 import { getSectorIntelligence, warmupSectorModels } from '@/lib/ml/onnxEngine';
 import { calculateSectorPrimarySnapshot, toPrimaryFeatureVector, rankPercentileValue } from '@/lib/ml/sectorSignalFeatures';
 
+export const runtime = 'nodejs';
+
 const SECTORS = [
   { symbol: '^CNXIT', name: 'IT' },
   { symbol: '^NSEBANK', name: 'Bank' },
@@ -66,7 +68,9 @@ export async function GET(request: Request) {
 
     // Keep first invocation snappy by triggering model load in parallel with quote fetches.
     const warmupPromise = warmupSectorModels().catch((error) => {
-      logger.warn(`ONNX warmup failed: ${error?.message || error}`);
+      const message = error?.message || String(error);
+      logger.warn(`ONNX warmup failed: ${message}`);
+      console.warn(`[ML][warmup][failed] ${message}`);
       return null;
     });
 
@@ -132,9 +136,16 @@ export async function GET(request: Request) {
     };
 
     const results = [] as Array<any>;
+    let mlOkCount = 0;
+    let mlFailedCount = 0;
+    let mlSkippedCount = 0;
 
     for (const item of snapshots) {
       let mlInsights = null;
+      let mlStatus: { status: 'ok' | 'failed' | 'skipped'; reason: string } = {
+        status: 'skipped',
+        reason: 'Snapshot unavailable for ML inference',
+      };
 
       try {
         if (item.primarySnapshot && item.legacySnapshot) {
@@ -156,9 +167,24 @@ export async function GET(request: Request) {
             primaryFeatures,
             legacyFeatures,
           };
+
+          mlStatus = {
+            status: 'ok',
+            reason: 'Inference completed',
+          };
+          mlOkCount += 1;
+        } else {
+          mlSkippedCount += 1;
         }
       } catch (error: any) {
-        logger.warn(`ML inference failed for ${item.name}: ${error?.message || error}`);
+        const message = error?.message || String(error);
+        logger.warn(`ML inference failed for ${item.name}: ${message}`);
+        console.warn(`[ML][inference][failed] sector=${item.name} reason=${message}`);
+        mlStatus = {
+          status: 'failed',
+          reason: message,
+        };
+        mlFailedCount += 1;
       }
 
       results.push({
@@ -166,13 +192,22 @@ export async function GET(request: Request) {
         head: item.head,
         tail: item.tail,
         ml: mlInsights,
+        mlStatus,
       });
     }
+
+    console.info(`[ML][summary] ok=${mlOkCount} failed=${mlFailedCount} skipped=${mlSkippedCount} total=${results.length}`);
 
     return NextResponse.json({ 
       timestamp: new Date().toISOString(),
       config: { interval, rsWindow, rocWindow, backtestDate: dateParam || 'Live' },
       cacheHit: !refreshParam,
+      mlDiagnostics: {
+        ok: mlOkCount,
+        failed: mlFailedCount,
+        skipped: mlSkippedCount,
+        total: results.length,
+      },
       sectors: results
     });
 
