@@ -58,11 +58,11 @@ let warmupCompleted = false;
 const loadOrtRuntime = async () => {
   if (ortModulePromise) return ortModulePromise;
   ortModulePromise = (async () => {
-    if (typeof window === 'undefined') {
-      return import('onnxruntime-node');
-    } else {
-      return import('onnxruntime-web');
+    if (typeof window !== 'undefined') {
+      throw new Error('onnxEngine is server-only and cannot run in browser context');
     }
+
+    return import('onnxruntime-node');
   })();
   return ortModulePromise;
 };
