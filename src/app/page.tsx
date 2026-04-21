@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import RRGChart from '@/components/RRGChart';
 import MovementHighlights from '@/components/MovementHighlights';
 import { 
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 import { useToast } from '@/components/Toast';
+import { enrichSectorsWithBrowserMl } from '@/lib/ml/browserInference';
 
 // --- CONSTANTS ---
 const INTERVAL_OPTIONS = [
@@ -21,6 +22,7 @@ const INTERVAL_OPTIONS = [
 
 export default function Home() {
     const toast = useToast();
+  const requestSeqRef = useRef(0);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<any>(null);
@@ -235,6 +237,7 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    const requestSeq = ++requestSeqRef.current;
     try {
       const params = new URLSearchParams({ interval, rsWindow, rocWindow });
       
@@ -243,10 +246,32 @@ export default function Home() {
         params.append('date', backtestDate);
       }
 
-      const res = await fetch(`/api/market-data?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to fetch data');
-      const json = await res.json();
-      if (json.sectors) setData(json.sectors);
+      const fetchMarketData = async (forceRefresh: boolean) => {
+        const reqParams = new URLSearchParams(params.toString());
+        if (forceRefresh) reqParams.set('refresh', 'true');
+        const res = await fetch(`/api/market-data?${reqParams.toString()}`);
+        if (!res.ok) throw new Error('Failed to fetch data');
+        return res.json();
+      };
+
+      let json = await fetchMarketData(false);
+      if ((json?.sectors?.length ?? 0) < 6) {
+        // Retry once with refresh=true to recover from transient upstream throttling.
+        json = await fetchMarketData(true);
+      }
+
+      if (requestSeq !== requestSeqRef.current) return;
+
+      if (json.sectors) {
+        setData(json.sectors);
+        try {
+          const enriched = await enrichSectorsWithBrowserMl(json.sectors);
+          if (requestSeq !== requestSeqRef.current) return;
+          setData(enriched);
+        } catch (mlError) {
+          console.error('[ML][browser][error] Unable to enrich sectors in browser:', mlError);
+        }
+      }
       if (json.config) setConfig(json.config);
     } catch (err) {
       console.error(err);

@@ -3,7 +3,6 @@ import { calculateRRGData } from '@/lib/rrgMath';
 import { getChartQuotesWithFallback } from '@/lib/yfCache';
 import { logger } from '@/lib/logger';
 import { calculateSectorMlFeatures, toFeatureVector } from '@/lib/ml/featureCalc';
-import { getSectorIntelligence, warmupSectorModels } from '@/lib/ml/onnxEngine';
 import { calculateSectorPrimarySnapshot, toPrimaryFeatureVector, rankPercentileValue } from '@/lib/ml/sectorSignalFeatures';
 
 export const runtime = 'nodejs';
@@ -66,40 +65,22 @@ export async function GET(request: Request) {
 
     logger.info(`Market-Data API: interval=${interval}, refresh=${refreshParam}, backtestDate=${dateParam || 'live'}`);
 
-    console.info('[ML][warmup][start] loading ONNX sessions');
-    try {
-      await warmupSectorModels({ retries: 3, retryDelayMs: 1200 });
-      console.info('[ML][warmup][ok] ONNX sessions cached');
-    } catch (error: any) {
-      const message = error?.message || String(error);
-      logger.error(`ONNX warmup failed: ${message}`);
-      console.warn(`[ML][warmup][failed] ${message}`);
-      return NextResponse.json(
-        {
-          error: 'ML warmup failed on server',
-          mlDiagnostics: {
-            ok: 0,
-            failed: 0,
-            skipped: 0,
-            total: 0,
-            warmup: 'failed',
-            reason: message,
-          },
-          sectors: [],
-        },
-        { status: 503 }
-      );
-    }
-
     // Fetch benchmark
     let benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval, refreshParam);
     
     // Fetch sectors sequentially with delay to avoid rate limits
     const sectorsData: any[] = [];
     for (const sector of SECTORS) {
-      const data = await fetchWithRetry(sector.symbol, startDate, endDate, interval, refreshParam);
+      let data = await fetchWithRetry(sector.symbol, startDate, endDate, interval, refreshParam);
+
+      // If upstream throttles this symbol, perform one extra spaced retry.
+      if (!data || data.length < 5) {
+        await new Promise(r => setTimeout(r, 900));
+        data = await fetchWithRetry(sector.symbol, startDate, endDate, interval, true);
+      }
+
       sectorsData.push(data);
-      await new Promise(r => setTimeout(r, 300)); // 300ms delay between sectors
+      await new Promise(r => setTimeout(r, 450)); // Slightly slower pacing improves consistency.
     }
 
     if (!benchmarkData || benchmarkData.length === 0) {
@@ -151,55 +132,38 @@ export async function GET(request: Request) {
     };
 
     const results = [] as Array<any>;
-    let mlOkCount = 0;
-    let mlFailedCount = 0;
+    let mlReadyCount = 0;
     let mlSkippedCount = 0;
 
     for (const item of snapshots) {
       let mlInsights = null;
-      let mlStatus: { status: 'ok' | 'failed' | 'skipped'; reason: string } = {
+      let mlInput: { primaryFeatures: number[]; legacyFeatures: number[] } | null = null;
+      let mlStatus: { status: 'ready-client' | 'skipped'; reason: string } = {
         status: 'skipped',
         reason: 'Snapshot unavailable for ML inference',
       };
 
-      try {
-        if (item.primarySnapshot && item.legacySnapshot) {
-          const primaryFeatures = toPrimaryFeatureVector(item.primarySnapshot, {
-            Rank_RS_Ratio: percentileRank(item.primarySnapshot.RS_Ratio, rankValues.rsRatio),
-            Rank_RS_Momentum: percentileRank(item.primarySnapshot.RS_Momentum, rankValues.rsMomentum),
-            Rank_Excess_Ret_20d: percentileRank(item.primarySnapshot.Excess_Ret_20d, rankValues.excessRet20d),
-            Rank_Vol_20d: percentileRank(item.primarySnapshot.Vol_20d, rankValues.vol20d),
-          });
+      if (item.primarySnapshot && item.legacySnapshot) {
+        const primaryFeatures = toPrimaryFeatureVector(item.primarySnapshot, {
+          Rank_RS_Ratio: percentileRank(item.primarySnapshot.RS_Ratio, rankValues.rsRatio),
+          Rank_RS_Momentum: percentileRank(item.primarySnapshot.RS_Momentum, rankValues.rsMomentum),
+          Rank_Excess_Ret_20d: percentileRank(item.primarySnapshot.Excess_Ret_20d, rankValues.excessRet20d),
+          Rank_Vol_20d: percentileRank(item.primarySnapshot.Vol_20d, rankValues.vol20d),
+        });
 
-          const legacyFeatures = toFeatureVector(item.legacySnapshot);
-          const intelligence = await getSectorIntelligence({
-            primaryFeatures,
-            legacyFeatures,
-          });
-
-          mlInsights = {
-            ...intelligence,
-            primaryFeatures,
-            legacyFeatures,
-          };
-
-          mlStatus = {
-            status: 'ok',
-            reason: 'Inference completed',
-          };
-          mlOkCount += 1;
-        } else {
-          mlSkippedCount += 1;
-        }
-      } catch (error: any) {
-        const message = error?.message || String(error);
-        logger.warn(`ML inference failed for ${item.name}: ${message}`);
-        console.warn(`[ML][inference][failed] sector=${item.name} reason=${message}`);
-        mlStatus = {
-          status: 'failed',
-          reason: message,
+        const legacyFeatures = toFeatureVector(item.legacySnapshot);
+        mlInput = {
+          primaryFeatures,
+          legacyFeatures,
         };
-        mlFailedCount += 1;
+
+        mlStatus = {
+          status: 'ready-client',
+          reason: 'Feature vectors ready for client-side inference',
+        };
+        mlReadyCount += 1;
+      } else {
+        mlSkippedCount += 1;
       }
 
       results.push({
@@ -207,22 +171,21 @@ export async function GET(request: Request) {
         head: item.head,
         tail: item.tail,
         ml: mlInsights,
+        mlInput,
         mlStatus,
       });
     }
 
-    console.info(`[ML][summary] ok=${mlOkCount} failed=${mlFailedCount} skipped=${mlSkippedCount} total=${results.length}`);
+    console.info(`[ML][summary] ready-client=${mlReadyCount} skipped=${mlSkippedCount} total=${results.length}`);
 
     return NextResponse.json({ 
       timestamp: new Date().toISOString(),
       config: { interval, rsWindow, rocWindow, backtestDate: dateParam || 'Live' },
       cacheHit: !refreshParam,
       mlDiagnostics: {
-        ok: mlOkCount,
-        failed: mlFailedCount,
+        readyClient: mlReadyCount,
         skipped: mlSkippedCount,
         total: results.length,
-        warmup: 'ok',
       },
       sectors: results
     });

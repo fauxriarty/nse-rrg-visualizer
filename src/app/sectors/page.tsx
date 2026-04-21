@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
+import { enrichSectorsWithBrowserMl } from '@/lib/ml/browserInference';
 
 const INTERVAL_OPTIONS = [
   { label: 'Daily', value: '1d' },
@@ -239,7 +240,8 @@ function SectorsPageContent() {
         const aiRes = await fetch(`/api/market-data?${aiParams.toString()}`);
         if (aiRes.ok) {
           const aiJson = await aiRes.json();
-          const sectorNameMatch = aiJson.sectors?.find((entry: any) => entry.name === currentSectorName || entry.name === sectorName);
+          const enrichedSectors = await enrichSectorsWithBrowserMl(aiJson.sectors || []);
+          const sectorNameMatch = enrichedSectors.find((entry: any) => entry.name === currentSectorName || entry.name === sectorName);
           setSectorAi(sectorNameMatch?.ml ?? null);
         } else {
           setSectorAi(null);

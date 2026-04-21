@@ -9,6 +9,7 @@ import {
   Clock, History, Target, Search, X, Plus, Save, Trash2, TrendingUp
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
+import { enrichSectorsWithBrowserMl } from '@/lib/ml/browserInference';
 
 const INTERVAL_OPTIONS = [
   { label: 'Daily', value: '1d' },
@@ -341,12 +342,13 @@ export default function CustomAnalysisPage() {
         }
 
         const json = await res.json();
-        const topSector = (json.sectors || [])
+        const enrichedSectors = await enrichSectorsWithBrowserMl(json.sectors || []);
+        const topSector = enrichedSectors
           .filter((entry: any) => entry?.ml?.primary)
           .sort((a: any, b: any) => (b.ml.primary.confidence ?? 0) - (a.ml.primary.confidence ?? 0))[0] || null;
 
         if (!cancelled) {
-          setMarketAi(topSector?.ml ? { name: topSector.name, ml: topSector.ml } : null);
+          setMarketAi(topSector?.ml ? { name: topSector.name, ...topSector.ml } : null);
         }
       } catch {
         if (!cancelled) setMarketAi(null);

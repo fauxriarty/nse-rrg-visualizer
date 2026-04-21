@@ -58,11 +58,7 @@ let warmupCompleted = false;
 const loadOrtRuntime = async () => {
   if (ortModulePromise) return ortModulePromise;
   ortModulePromise = (async () => {
-    if (typeof window !== 'undefined') {
-      throw new Error('onnxEngine is server-only and cannot run in browser context');
-    }
-
-    return import('onnxruntime-node');
+    return import('onnxruntime-web');
   })();
   return ortModulePromise;
 };
@@ -113,10 +109,6 @@ const modelFileJson = async <T,>(publicPath: string): Promise<T> => {
 const createSession = async (publicPath: string) => {
   const bytes = await modelFileBytes(publicPath);
   const ort = await loadOrtRuntime();
-  if (typeof window === 'undefined') {
-    return ort.InferenceSession.create(bytes);
-  }
-
   return ort.InferenceSession.create(bytes, {
     executionProviders: ['wasm'],
   });
