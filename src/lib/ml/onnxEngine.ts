@@ -52,6 +52,8 @@ type PrimaryMeta = {
 };
 
 let primaryMetaPromise: Promise<PrimaryMeta | null> | null = null;
+let warmupInFlightPromise: Promise<void> | null = null;
+let warmupCompleted = false;
 
 const loadOrtRuntime = async () => {
   if (ortModulePromise) return ortModulePromise;
@@ -122,21 +124,30 @@ const createSession = async (publicPath: string) => {
 
 const getModelASession = () => {
   if (!modelASessionPromise) {
-    modelASessionPromise = createSession(MODEL_A_PATH);
+    modelASessionPromise = createSession(MODEL_A_PATH).catch((error) => {
+      modelASessionPromise = null;
+      throw error;
+    });
   }
   return modelASessionPromise;
 };
 
 const getPrimarySession = () => {
   if (!primarySessionPromise) {
-    primarySessionPromise = createSession(MODEL_PRIMARY_PATH);
+    primarySessionPromise = createSession(MODEL_PRIMARY_PATH).catch((error) => {
+      primarySessionPromise = null;
+      throw error;
+    });
   }
   return primarySessionPromise;
 };
 
 const getModelBSession = () => {
   if (!modelBSessionPromise) {
-    modelBSessionPromise = createSession(MODEL_B_PATH);
+    modelBSessionPromise = createSession(MODEL_B_PATH).catch((error) => {
+      modelBSessionPromise = null;
+      throw error;
+    });
   }
   return modelBSessionPromise;
 };
@@ -257,8 +268,46 @@ const assertFeatureVector = (features: number[]) => {
   }
 };
 
-export const warmupSectorModels = async () => {
-  await Promise.all([getPrimarySession(), getModelASession(), getModelBSession(), getPrimaryMeta()]);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export const warmupSectorModels = async (
+  opts?: {
+    retries?: number;
+    retryDelayMs?: number;
+    force?: boolean;
+  }
+) => {
+  const retries = Math.max(1, opts?.retries ?? 3);
+  const retryDelayMs = Math.max(100, opts?.retryDelayMs ?? 1000);
+  const force = opts?.force ?? false;
+
+  if (!force && warmupCompleted) return;
+  if (!force && warmupInFlightPromise) return warmupInFlightPromise;
+
+  const runWarmup = async () => {
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        await Promise.all([getPrimarySession(), getModelASession(), getModelBSession(), getPrimaryMeta()]);
+        warmupCompleted = true;
+        return;
+      } catch (error) {
+        lastError = error;
+        if (attempt < retries) {
+          await wait(retryDelayMs);
+        }
+      }
+    }
+
+    throw lastError ?? new Error('ONNX warmup failed');
+  };
+
+  warmupInFlightPromise = runWarmup().finally(() => {
+    warmupInFlightPromise = null;
+  });
+
+  return warmupInFlightPromise;
 };
 
 export const getSectorIntelligence = async ({

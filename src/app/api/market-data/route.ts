@@ -66,13 +66,30 @@ export async function GET(request: Request) {
 
     logger.info(`Market-Data API: interval=${interval}, refresh=${refreshParam}, backtestDate=${dateParam || 'live'}`);
 
-    // Keep first invocation snappy by triggering model load in parallel with quote fetches.
-    const warmupPromise = warmupSectorModels().catch((error) => {
+    console.info('[ML][warmup][start] loading ONNX sessions');
+    try {
+      await warmupSectorModels({ retries: 3, retryDelayMs: 1200 });
+      console.info('[ML][warmup][ok] ONNX sessions cached');
+    } catch (error: any) {
       const message = error?.message || String(error);
-      logger.warn(`ONNX warmup failed: ${message}`);
+      logger.error(`ONNX warmup failed: ${message}`);
       console.warn(`[ML][warmup][failed] ${message}`);
-      return null;
-    });
+      return NextResponse.json(
+        {
+          error: 'ML warmup failed on server',
+          mlDiagnostics: {
+            ok: 0,
+            failed: 0,
+            skipped: 0,
+            total: 0,
+            warmup: 'failed',
+            reason: message,
+          },
+          sectors: [],
+        },
+        { status: 503 }
+      );
+    }
 
     // Fetch benchmark
     let benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval, refreshParam);
@@ -89,8 +106,6 @@ export async function GET(request: Request) {
       logger.error('Benchmark fetch failed');
       return NextResponse.json({ error: 'Failed to fetch benchmark data' }, { status: 500 });
     }
-
-    await warmupPromise;
 
     logger.info(`Benchmark: ${benchmarkData.length} quotes, Sectors: ${sectorsData.filter(d => d.length > 0).length}/${SECTORS.length}`);
 
@@ -207,6 +222,7 @@ export async function GET(request: Request) {
         failed: mlFailedCount,
         skipped: mlSkippedCount,
         total: results.length,
+        warmup: 'ok',
       },
       sectors: results
     });
