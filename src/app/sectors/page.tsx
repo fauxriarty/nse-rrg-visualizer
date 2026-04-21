@@ -38,6 +38,7 @@ function SectorsPageContent() {
   const [showStockDropdown, setShowStockDropdown] = useState(false);
   const [hoveredStock, setHoveredStock] = useState<string | null>(null);
   const [showStockChart, setShowStockChart] = useState(false);
+  const [sectorAi, setSectorAi] = useState<any>(null);
   const displayedStocks = useMemo(() => data.filter((s: any) => selectedStocks.has(s.name)), [data, selectedStocks]);
 
   // Configuration State
@@ -226,6 +227,26 @@ function SectorsPageContent() {
       if (json.stocks) setData(json.stocks);
       if (json.config) setConfig(json.config);
       if (json.sector) setSectorName(json.sector);
+
+      // Pull the same sector-level AI signal used on the main market page.
+      try {
+        const currentSectorInfo = SECTOR_INDICES.find((entry) => entry.symbol === selectedSector);
+        const currentSectorName = currentSectorInfo?.name || sectorName;
+        const aiParams = new URLSearchParams({ interval, rsWindow, rocWindow });
+        if (backtestDate) {
+          aiParams.append('date', backtestDate);
+        }
+        const aiRes = await fetch(`/api/market-data?${aiParams.toString()}`);
+        if (aiRes.ok) {
+          const aiJson = await aiRes.json();
+          const sectorNameMatch = aiJson.sectors?.find((entry: any) => entry.name === currentSectorName || entry.name === sectorName);
+          setSectorAi(sectorNameMatch?.ml ?? null);
+        } else {
+          setSectorAi(null);
+        }
+      } catch {
+        setSectorAi(null);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -365,6 +386,52 @@ function SectorsPageContent() {
           </div>
         </div>
       </div>
+
+      {sectorAi?.primary && (
+        <div className="max-w-7xl mx-auto mb-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 className="text-white font-bold text-base sm:text-lg flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" /> Sector AI Signal
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Primary 3-class signal for this sector, with legacy rotation and stretch overlays.
+                </p>
+              </div>
+              <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-1">
+                {sectorAi.primary.predictedLabel}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Primary Direction</div>
+                <div className="text-slate-100 font-semibold">{sectorAi.primary.predictedLabel}</div>
+                <div className="text-xs text-slate-400 mt-1">
+                  Up {Math.round((sectorAi.primary.probabilities?.up ?? 0) * 100)}% | Neutral {Math.round((sectorAi.primary.probabilities?.neutral ?? 0) * 100)}% | Down {Math.round((sectorAi.primary.probabilities?.down ?? 0) * 100)}%
+                </div>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Legacy Rotation</div>
+                <div className="text-slate-100 font-semibold">{Math.round((sectorAi.legacy?.leadingProbability ?? 0) * 100)}% lead confidence</div>
+                <div className="text-xs text-slate-400 mt-1">Supporting confirmation only.</div>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Legacy Stretch</div>
+                <div className="text-slate-100 font-semibold">{Math.round(sectorAi.legacy?.exhaustionRiskGauge ?? 0)}/100 risk</div>
+                <div className="text-xs text-slate-400 mt-1">Use to tone down aggressive BUY calls.</div>
+              </div>
+            </div>
+
+            <div className="mt-4 text-sm text-slate-300 bg-slate-950 border border-slate-800 rounded-xl p-4">
+              {sectorAi.primary.action?.label}: {sectorAi.primary.action?.reason}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CHART CONTAINER */}
       <div className="max-w-7xl mx-auto mb-16">

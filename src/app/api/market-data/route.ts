@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { calculateRRGData } from '@/lib/rrgMath';
 import { getChartQuotesWithFallback } from '@/lib/yfCache';
 import { logger } from '@/lib/logger';
+import { calculateSectorMlFeatures, toFeatureVector } from '@/lib/ml/featureCalc';
+import { getSectorIntelligence, warmupSectorModels } from '@/lib/ml/onnxEngine';
+import { calculateSectorPrimarySnapshot, toPrimaryFeatureVector, rankPercentileValue } from '@/lib/ml/sectorSignalFeatures';
 
 const SECTORS = [
   { symbol: '^CNXIT', name: 'IT' },
@@ -19,6 +22,8 @@ const SECTORS = [
 ];
 
 const BENCHMARK = '^NSEI';
+
+const percentileRank = (value: number, series: number[]) => rankPercentileValue(value, series);
 
 async function fetchWithRetry(symbol: string, period1: Date, period2: Date, interval: '1d' | '1wk' | '1mo', forceRefresh: boolean = false): Promise<any[]> {
   for (let i = 0; i < 2; i++) {
@@ -59,6 +64,12 @@ export async function GET(request: Request) {
 
     logger.info(`Market-Data API: interval=${interval}, refresh=${refreshParam}, backtestDate=${dateParam || 'live'}`);
 
+    // Keep first invocation snappy by triggering model load in parallel with quote fetches.
+    const warmupPromise = warmupSectorModels().catch((error) => {
+      logger.warn(`ONNX warmup failed: ${error?.message || error}`);
+      return null;
+    });
+
     // Fetch benchmark
     let benchmarkData = await fetchWithRetry(BENCHMARK, startDate, endDate, interval, refreshParam);
     
@@ -75,29 +86,88 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Failed to fetch benchmark data' }, { status: 500 });
     }
 
+    await warmupPromise;
+
     logger.info(`Benchmark: ${benchmarkData.length} quotes, Sectors: ${sectorsData.filter(d => d.length > 0).length}/${SECTORS.length}`);
 
     const benchmarkCloses = benchmarkData.map((d: any) => d.close);
 
-    const results = SECTORS.map((sector, index) => {
-        const data = sectorsData[index];
-        if (!data || data.length < 5) return null; 
+    const snapshots = (
+      await Promise.all(
+        SECTORS.map(async (sector, index) => {
+          const data = sectorsData[index];
+          if (!data || data.length < 5) return null;
 
-        const closes = data.map((d: any) => d.close);
-        const fullHistory = calculateRRGData(closes, benchmarkCloses, rsWindow, rocWindow);
+          const closes = data.map((d: any) => d.close);
+          const fullHistory = calculateRRGData(closes, benchmarkCloses, rsWindow, rocWindow);
 
-        if (!fullHistory || fullHistory.length === 0) return null;
+          if (!fullHistory || fullHistory.length === 0) return null;
 
-        const head = fullHistory[fullHistory.length - 1];
-        // Tail should include last 10 points before the head
-        const tail = fullHistory.slice(Math.max(0, fullHistory.length - 11), fullHistory.length - 1);
+          const head = fullHistory[fullHistory.length - 1];
+          const tail = fullHistory.slice(Math.max(0, fullHistory.length - 11), fullHistory.length - 1);
 
-        return {
-          name: sector.name,
-          head, 
-          tail
-        };
-    }).filter(r => r !== null);
+          const legacySnapshot = calculateSectorMlFeatures(closes, benchmarkCloses);
+          const primarySnapshot = calculateSectorPrimarySnapshot(closes, benchmarkCloses);
+
+          return {
+            name: sector.name,
+            head,
+            tail,
+            legacySnapshot,
+            primarySnapshot,
+          };
+        })
+      )
+    ).filter((r): r is NonNullable<typeof r> => r !== null);
+
+    const primarySnapshots = snapshots
+      .map((item) => item.primarySnapshot)
+      .filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
+
+    const rankValues = {
+      rsRatio: primarySnapshots.map((snapshot) => snapshot.RS_Ratio),
+      rsMomentum: primarySnapshots.map((snapshot) => snapshot.RS_Momentum),
+      excessRet20d: primarySnapshots.map((snapshot) => snapshot.Excess_Ret_20d),
+      vol20d: primarySnapshots.map((snapshot) => snapshot.Vol_20d),
+    };
+
+    const results = [] as Array<any>;
+
+    for (const item of snapshots) {
+      let mlInsights = null;
+
+      try {
+        if (item.primarySnapshot && item.legacySnapshot) {
+          const primaryFeatures = toPrimaryFeatureVector(item.primarySnapshot, {
+            Rank_RS_Ratio: percentileRank(item.primarySnapshot.RS_Ratio, rankValues.rsRatio),
+            Rank_RS_Momentum: percentileRank(item.primarySnapshot.RS_Momentum, rankValues.rsMomentum),
+            Rank_Excess_Ret_20d: percentileRank(item.primarySnapshot.Excess_Ret_20d, rankValues.excessRet20d),
+            Rank_Vol_20d: percentileRank(item.primarySnapshot.Vol_20d, rankValues.vol20d),
+          });
+
+          const legacyFeatures = toFeatureVector(item.legacySnapshot);
+          const intelligence = await getSectorIntelligence({
+            primaryFeatures,
+            legacyFeatures,
+          });
+
+          mlInsights = {
+            ...intelligence,
+            primaryFeatures,
+            legacyFeatures,
+          };
+        }
+      } catch (error: any) {
+        logger.warn(`ML inference failed for ${item.name}: ${error?.message || error}`);
+      }
+
+      results.push({
+        name: item.name,
+        head: item.head,
+        tail: item.tail,
+        ml: mlInsights,
+      });
+    }
 
     return NextResponse.json({ 
       timestamp: new Date().toISOString(),

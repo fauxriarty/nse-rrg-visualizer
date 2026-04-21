@@ -24,11 +24,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed top-24 right-4 z-[60] flex flex-col gap-2">
+      <div className="fixed top-24 right-4 z-60 flex flex-col gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`min-w-[220px] max-w-sm px-3 py-2 rounded-lg border shadow-lg text-sm
+            className={`min-w-55 max-w-sm px-3 py-2 rounded-lg border shadow-lg text-sm
               ${t.variant === 'success' ? 'bg-green-600/20 border-green-500/40 text-green-200' : ''}
               ${t.variant === 'error' ? 'bg-red-600/20 border-red-500/40 text-red-200' : ''}
               ${t.variant === 'info' ? 'bg-blue-600/20 border-blue-500/40 text-blue-200' : ''}

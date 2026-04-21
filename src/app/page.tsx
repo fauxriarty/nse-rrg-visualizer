@@ -6,7 +6,8 @@ import MovementHighlights from '@/components/MovementHighlights';
 import { 
   RefreshCw, Activity, ArrowRight, TrendingUp, Zap, 
   Clock, Info, BarChart3, Calendar, ChevronDown, SlidersHorizontal, 
-  BookOpen, Calculator, Database, Server, Sigma, History, X
+  BookOpen, Calculator, Database, Server, Sigma, History, X, Radar,
+  BrainCircuit, Gauge, TriangleAlert, Award
 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 import { useToast } from '@/components/Toast';
@@ -103,6 +104,56 @@ export default function Home() {
     return filtered;
   }, [data, selectedSectors]);
   const intervalLabel = useMemo(() => interval === '1d' ? 'Daily' : interval === '1mo' ? 'Monthly' : 'Weekly', [interval]);
+  const aiRows = useMemo(() => {
+    return [...data]
+      .filter((item: any) => item?.ml?.primary && item?.ml?.legacy)
+      .map((item: any) => {
+        const primary = item.ml.primary;
+        const legacy = item.ml.legacy;
+        const upProbabilityPct = Math.max(0, Math.min(100, (primary?.probabilities?.up ?? 0) * 100));
+        const downProbabilityPct = Math.max(0, Math.min(100, (primary?.probabilities?.down ?? 0) * 100));
+        const neutralProbabilityPct = Math.max(0, Math.min(100, (primary?.probabilities?.neutral ?? 0) * 100));
+        const legacyLeadPct = Math.max(0, Math.min(100, (legacy?.leadingProbability ?? 0) * 100));
+        const riskGauge = Math.max(0, Math.min(100, legacy?.exhaustionRiskGauge ?? 0));
+        const primaryAction = primary?.action ?? getPrimaryAction(primary, legacy);
+        return {
+          ...item,
+          primary,
+          legacy,
+          upProbabilityPct,
+          downProbabilityPct,
+          neutralProbabilityPct,
+          legacyLeadPct,
+          riskGauge,
+          primaryConfidencePct: Math.max(0, Math.min(100, (primary?.confidence ?? 0) * 100)),
+          compositeScore: (upProbabilityPct * 0.55) + (legacyLeadPct * 0.20) - (riskGauge * 0.35),
+          action: primaryAction,
+        };
+      });
+  }, [data]);
+
+  const actionDeskRows = useMemo(() => {
+    const actionRank: Record<string, number> = { BUY: 0, HOLD: 1, SELL: 2 };
+
+    return [...aiRows]
+      .sort((a: any, b: any) => {
+        const rankDelta = actionRank[a.action.label] - actionRank[b.action.label];
+        if (rankDelta !== 0) return rankDelta;
+        return b.compositeScore - a.compositeScore;
+      });
+  }, [aiRows]);
+
+  const primaryLeaderRow = useMemo(() => {
+    return [...aiRows].sort((a: any, b: any) => b.primaryConfidencePct - a.primaryConfidencePct)[0] ?? null;
+  }, [aiRows]);
+
+  const bestCompositeRow = useMemo(() => {
+    return [...aiRows].sort((a: any, b: any) => b.compositeScore - a.compositeScore)[0] ?? null;
+  }, [aiRows]);
+
+  const exhaustionRow = useMemo(() => {
+    return [...aiRows].sort((a: any, b: any) => b.riskGauge - a.riskGauge)[0] ?? null;
+  }, [aiRows]);
 
   // --- DYNAMIC OPTIONS ---
   const rsOptions = useMemo(() => {
@@ -320,6 +371,155 @@ export default function Home() {
         </div>
       )}
 
+      <div className="max-w-7xl mx-auto mb-10">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 overflow-hidden relative">
+          <div className="absolute inset-0 bg-linear-to-br from-cyan-500/5 via-transparent to-emerald-500/5 pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col gap-4 mb-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-white font-bold text-base sm:text-lg flex items-center gap-2">
+                  <Radar className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400" />
+                  AI Sector Outlook
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  A simple sector decision layer that combines direction, momentum support, and trend heat.
+                </p>
+              </div>
+              <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-1">
+                {aiRows.length} sectors scored
+              </span>
+            </div>
+
+          </div>
+
+          {aiRows.length > 0 && (
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-1.5">
+                  <BrainCircuit className="w-3.5 h-3.5 text-cyan-400" /> Direction Signal
+                </div>
+                <div className="text-sm font-bold text-slate-100">{primaryLeaderRow?.name}</div>
+                <div className="text-xs text-cyan-300 mt-1">{getPrimarySignalDisplay(primaryLeaderRow).shortLabel}</div>
+                <div className="text-[11px] text-slate-400 mt-2">
+                  This is the main model call: whether the sector is likely to outperform, stay neutral, or underperform.
+                </div>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-1.5">
+                  <Award className="w-3.5 h-3.5 text-emerald-400" /> Momentum Support
+                </div>
+                <div className="text-sm font-bold text-slate-100">{bestCompositeRow?.name}</div>
+                <div className="text-xs text-emerald-300 mt-1">{bestCompositeRow ? `${bestCompositeRow.legacyLeadPct.toFixed(0)}% support` : 'No signal yet'}</div>
+                <div className="text-[11px] text-slate-400 mt-2">
+                  A support score showing whether momentum is backing the main direction call.
+                </div>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1 flex items-center gap-1.5">
+                  <TriangleAlert className="w-3.5 h-3.5 text-amber-400" /> Trend Heat
+                </div>
+                <div className="text-sm font-bold text-slate-100">{exhaustionRow?.name}</div>
+                <div className="text-xs text-amber-300 mt-1">{exhaustionRow ? `${exhaustionRow.riskGauge.toFixed(0)}/100 stretch risk` : 'No signal yet'}</div>
+                <div className="text-[11px] text-slate-400 mt-2">
+                  A risk gauge showing how stretched the current trend may be.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {aiRows.length === 0 ? (
+            <div className="relative z-10 text-sm text-slate-400 bg-slate-950 border border-slate-800 rounded-xl p-4">
+              ML insights are not available yet for this dataset. This can happen during model warmup or if history is insufficient.
+            </div>
+          ) : (
+            <div className="relative z-10 flex flex-col gap-4">
+              <div className="bg-slate-950/80 border border-cyan-900/40 rounded-xl p-4 sm:p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <BrainCircuit className="w-4 h-4 text-cyan-300" />
+                  <h3 className="text-sm sm:text-base font-bold text-cyan-100">How The AI Decision Is Built</h3>
+                </div>
+                <p className="text-[11px] sm:text-xs text-slate-400 mb-3">
+                  Three models are combined in sequence. To reduce noise, the Direction column shows only the winning class probability.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px] sm:text-xs">
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5">
+                    <span className="font-semibold text-cyan-200">1) Direction Model</span>{' '}
+                    <span className="text-slate-500">(model_sector_signal.onnx)</span>
+                    <div className="text-slate-400 mt-1">Primary sector-relative call that classifies the setup as UP, NEUTRAL, or DOWN.</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5">
+                    <span className="font-semibold text-emerald-200">2) Momentum Support Model</span>{' '}
+                    <span className="text-slate-500">(model_a_leading.onnx)</span>
+                    <div className="text-slate-400 mt-1">Confirms whether rotation momentum supports the direction call.</div>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5">
+                    <span className="font-semibold text-amber-200">3) Trend Heat Model</span>{' '}
+                    <span className="text-slate-500">(model_b_exhaustion.onnx)</span>
+                    <div className="text-slate-400 mt-1">Risk veto layer that flags stretched conditions and can downgrade aggressive actions.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-emerald-200 flex items-center gap-2 mb-1">
+                  <Gauge className="w-4 h-4" /> Final Action Table
+                </h3>
+                <p className="text-[11px] text-slate-500 mb-3">
+                  Decision order: Direction sets bias, Momentum Support confirms quality, Trend Heat can downgrade aggressive calls.
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-800">
+                        <th className="py-2 pr-3">Sector</th>
+                        <th className="py-2 pr-3">Direction</th>
+                        <th className="py-2 pr-3">Momentum Support</th>
+                        <th className="py-2 pr-3">Trend Heat</th>
+                        <th className="py-2 pr-3">Action Bias</th>
+                        <th className="py-2">Why</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actionDeskRows.map((item: any) => {
+                        const primarySignal = getPrimarySignalDisplay(item);
+                        const legacyLeadBadge = getLegacyLeadBadge(item.legacyLeadPct);
+                        const exhaustionBadge = getExhaustionBadge(item.riskGauge);
+                        const actionNarrative = getActionNarrative(item);
+                        return (
+                          <tr key={`action-${item.name}`} className="border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 pr-3 text-slate-100 font-semibold">{item.name}</td>
+                            <td className="py-3 pr-3 text-cyan-300 text-xs sm:text-sm">{primarySignal.shortLabel}</td>
+                            <td className="py-3 pr-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-[11px] font-bold border ${legacyLeadBadge.className}`}>
+                                {legacyLeadBadge.label}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-[11px] font-bold border ${exhaustionBadge.className}`}>
+                                {exhaustionBadge.label}
+                              </span>
+                            </td>
+                            <td className="py-3 pr-3">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold border ${item.action.className}`}>
+                                {item.action.label}
+                              </span>
+                            </td>
+                            <td className="py-3 text-slate-200 text-xs font-semibold">{actionNarrative}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* --- UNDERSTANDING CONFIGURATION PARAMETERS --- */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors">
@@ -384,106 +584,96 @@ export default function Home() {
         </div>
       </div>
       
-      {/* --- 3-COLUMN INFO GRID (Included for completeness) --- */}
+      {/* --- AI EXPLAINER GRID --- */}
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 mb-20">
         
-        {/* 1. DATA ARCHITECTURE */}
+        {/* 1. WHAT MODELS DO */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
-             <div className="p-2 bg-purple-500/10 rounded-lg"><Server className="w-5 h-5 text-purple-500" /></div>
-             <h2 className="text-lg font-bold text-white">Data Architecture</h2>
+             <div className="p-2 bg-cyan-500/10 rounded-lg"><BrainCircuit className="w-5 h-5 text-cyan-400" /></div>
+             <h2 className="text-lg font-bold text-white">What The AI Models Measure</h2>
           </div>
           <div className="space-y-5 text-sm text-slate-400">
             <div>
               <h3 className="text-slate-200 font-semibold mb-1 flex items-center gap-2">
-                <Database className="w-3.5 h-3.5" /> The "Iceberg" Fetch
+                <Radar className="w-3.5 h-3.5" /> Direction Signal (Primary Model)
               </h3>
               <p className="text-xs leading-relaxed opacity-90">
-                To calculate a single point (e.g. 50-bar trend), we need massive history. We fetch <strong>2 years</strong> for Daily and <strong>5 years</strong> for Weekly charts. This buffer prevents errors during market holidays.
+                Estimates whether a sector is more likely to <strong>outperform</strong>, stay <strong>neutral</strong>, or <strong>underperform</strong> versus peers.
               </p>
             </div>
             <div>
               <h3 className="text-slate-200 font-semibold mb-1 flex items-center gap-2">
-                <Server className="w-3.5 h-3.5" /> Smart Cache (30m TTL)
+                <TrendingUp className="w-3.5 h-3.5" /> Momentum Support
               </h3>
               <p className="text-xs leading-relaxed opacity-90">
-                All API fetches are cached in memory + disk for 30 minutes. Refresh uses the cache unless explicitly forced, so we stay under vendor rate limits while keeping data fresh twice per hour.
+                Checks whether current rotation structure supports the main direction call. It works as a <strong>confirmation layer</strong>.
               </p>
             </div>
             <div>
               <h3 className="text-slate-200 font-semibold mb-1 flex items-center gap-2">
-                <Zap className="w-3.5 h-3.5" /> Null-Tolerant Engine
+                <TriangleAlert className="w-3.5 h-3.5" /> Trend Heat
               </h3>
               <p className="text-xs leading-relaxed opacity-90">
-                If a sector (like a new IPO) lacks data, our math engine doesn't crash. It dynamically shrinks the smoothing window to the "best possible" fit for that specific stock.
+                Gauges how stretched a move is. Higher heat means more pullback risk and lower confidence in aggressive entries.
               </p>
             </div>
           </div>
         </div>
 
-        {/* 2. THE MATH ENGINE */}
+        {/* 2. WHY SIGNALS ARE TRUSTWORTHY */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
-             <div className="p-2 bg-blue-500/10 rounded-lg"><Calculator className="w-5 h-5 text-blue-500" /></div>
-             <h2 className="text-lg font-bold text-white">The Math Engine</h2>
+             <div className="p-2 bg-blue-500/10 rounded-lg"><Gauge className="w-5 h-5 text-blue-400" /></div>
+             <h2 className="text-lg font-bold text-white">How Reliability Is Controlled</h2>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 text-sm text-slate-400">
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
-              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">1. Relative Strength (RS)</div>
-              <code className="text-xs text-blue-300 font-mono block">Price_Sector / Price_Nifty50</code>
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">1. Conservative Action Thresholds</div>
+              <p className="text-xs leading-relaxed">BUY and SELL are triggered only when probability is sufficiently strong. Mixed cases default to HOLD.</p>
             </div>
             
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
-              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">2. Simple Moving Average (SMA)</div>
-              <p className="text-[10px] text-slate-400 mb-1">Smoothes the curve. 'n' = RS Period.</p>
-              <code className="text-xs text-blue-300 font-mono block">Sum(Last_n_RS) / n</code>
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">2. Multi-Layer Validation</div>
+              <p className="text-xs leading-relaxed">Direction, momentum support, and trend heat are read together so one noisy signal does not dominate.</p>
             </div>
 
             <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/50">
-              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">3. Momentum (Y-Axis)</div>
-              <p className="text-[10px] text-slate-400 mb-1">Velocity vs 'n' bars ago. 'n' = ROC Period.</p>
-              <code className="text-xs text-blue-300 font-mono block">(Ratio_Now / Ratio_n_Ago) * 100</code>
+              <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">3. Cross-Sector Comparison</div>
+              <p className="text-xs leading-relaxed">Signals are computed in a relative framework across sectors, which is more stable than isolated single-series forecasting.</p>
             </div>
           </div>
         </div>
 
-        {/* 3. STRATEGY PLAYBOOK */}
+        {/* 3. HOW TO USE ACTIONS */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col h-full hover:border-slate-700 transition-colors">
           <div className="flex items-center gap-3 mb-5 pb-4 border-b border-slate-800">
-             <div className="p-2 bg-emerald-500/10 rounded-lg"><BookOpen className="w-5 h-5 text-emerald-500" /></div>
-             <h2 className="text-lg font-bold text-white">Strategy Playbook</h2>
+             <div className="p-2 bg-emerald-500/10 rounded-lg"><BookOpen className="w-5 h-5 text-emerald-400" /></div>
+             <h2 className="text-lg font-bold text-white">How To Read BUY / HOLD / SELL</h2>
           </div>
           
           <div className="grid grid-cols-1 gap-3 h-full">
             <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
               <div className="p-1.5 bg-emerald-500/20 rounded text-emerald-400"><TrendingUp className="w-4 h-4" /></div>
               <div>
-                <span className="text-xs font-bold text-emerald-400 block uppercase">Leading (Top Right)</span>
-                <span className="text-[10px] text-slate-400">Trend Strong + Speed Increasing. <strong>Buy.</strong></span>
+                <span className="text-xs font-bold text-emerald-400 block uppercase">BUY</span>
+                <span className="text-[10px] text-slate-400">Direction is favorable and trend heat is controlled. Prefer adding on pullbacks, not spikes.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
               <div className="p-1.5 bg-amber-500/20 rounded text-amber-400"><Clock className="w-4 h-4" /></div>
               <div>
-                <span className="text-xs font-bold text-amber-400 block uppercase">Weakening (Bottom Right)</span>
-                <span className="text-[10px] text-slate-400">Trend Strong + Speed Falling. <strong>Book Profit.</strong></span>
+                <span className="text-xs font-bold text-amber-400 block uppercase">HOLD</span>
+                <span className="text-[10px] text-slate-400">Signals are mixed or neutral. Wait for direction to strengthen before taking size.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-3 p-2 rounded-lg bg-red-500/5 border border-red-500/10">
               <div className="p-1.5 bg-red-500/20 rounded text-red-400"><TrendingUp className="w-4 h-4 rotate-180" /></div>
               <div>
-                <span className="text-xs font-bold text-red-400 block uppercase">Lagging (Bottom Left)</span>
-                <span className="text-[10px] text-slate-400">Trend Weak + Speed Falling. <strong>Avoid.</strong></span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/5 border border-blue-500/10">
-              <div className="p-1.5 bg-blue-500/20 rounded text-blue-400"><Zap className="w-4 h-4" /></div>
-              <div>
-                <span className="text-xs font-bold text-blue-400 block uppercase">Improving (Top Left)</span>
-                <span className="text-[10px] text-slate-400">Trend Weak + Speed Rising. <strong>Watchlist.</strong></span>
+                <span className="text-xs font-bold text-red-400 block uppercase">SELL</span>
+                <span className="text-[10px] text-slate-400">Downside risk dominates or trend heat is extreme. Reduce exposure and avoid chasing.</span>
               </div>
             </div>
           </div>
@@ -504,6 +694,198 @@ export default function Home() {
 }
 
 // --- HELPER COMPONENTS ---
+
+function getExhaustionBadge(gauge: number) {
+  if (gauge < 35) {
+    return {
+      label: 'Stable',
+      className: 'text-emerald-300 border-emerald-600/40 bg-emerald-950/40',
+    };
+  }
+
+  if (gauge < 60) {
+    return {
+      label: 'Elevated Volatility',
+      className: 'text-amber-300 border-amber-600/40 bg-amber-950/30',
+    };
+  }
+
+  if (gauge < 80) {
+    return {
+      label: 'Overextended',
+      className: 'text-orange-300 border-orange-600/40 bg-orange-950/30',
+    };
+  }
+
+  return {
+    label: 'Extreme Exhaustion',
+    className: 'text-rose-300 border-rose-600/50 bg-rose-950/40',
+  };
+}
+
+function getLegacyLeadBadge(probability: number) {
+  if (probability < 35) {
+    return {
+      label: 'Low Support',
+      className: 'text-slate-300 border-slate-600/40 bg-slate-800/40',
+    };
+  }
+
+  if (probability < 65) {
+    return {
+      label: 'Building',
+      className: 'text-cyan-300 border-cyan-600/40 bg-cyan-950/30',
+    };
+  }
+
+  if (probability < 85) {
+    return {
+      label: 'Strong Support',
+      className: 'text-emerald-300 border-emerald-600/40 bg-emerald-950/30',
+    };
+  }
+
+  return {
+    label: 'Very Strong',
+    className: 'text-teal-200 border-teal-500/50 bg-teal-900/30',
+  };
+}
+
+function getPrimarySignalDisplay(row: any) {
+  if (!row?.primary) {
+    return {
+      label: 'No signal',
+      shortLabel: 'Primary model unavailable',
+      className: 'text-slate-300 border-slate-600/40 bg-slate-800/40',
+    };
+  }
+
+  const predictedLabel = row.primary.predictedLabel ?? 'NEUTRAL';
+  const confidencePct = Math.max(0, Math.min(100, (row.primary.confidence ?? 0) * 100));
+
+  if (predictedLabel === 'UP') {
+    return {
+      label: 'UP',
+      shortLabel: `Uptrend probability ${confidencePct.toFixed(1)}%`,
+      className: 'text-emerald-300 border-emerald-600/40 bg-emerald-950/35',
+    };
+  }
+
+  if (predictedLabel === 'DOWN') {
+    return {
+      label: 'DOWN',
+      shortLabel: `Downtrend probability ${confidencePct.toFixed(1)}%`,
+      className: 'text-rose-300 border-rose-600/40 bg-rose-950/30',
+    };
+  }
+
+  return {
+    label: 'NEUTRAL',
+    shortLabel: `Neutral probability ${confidencePct.toFixed(1)}%`,
+    className: 'text-cyan-300 border-cyan-600/40 bg-cyan-950/30',
+  };
+}
+
+function getSetupBadge(score: number) {
+  if (score < 20) {
+    return {
+      label: 'Avoid',
+      className: 'text-rose-300 border-rose-600/40 bg-rose-950/30',
+    };
+  }
+
+  if (score < 45) {
+    return {
+      label: 'Watch',
+      className: 'text-amber-300 border-amber-600/40 bg-amber-950/30',
+    };
+  }
+
+  if (score < 65) {
+    return {
+      label: 'Actionable',
+      className: 'text-cyan-300 border-cyan-600/40 bg-cyan-950/30',
+    };
+  }
+
+  return {
+    label: 'Top Setup',
+    className: 'text-emerald-300 border-emerald-600/40 bg-emerald-950/35',
+  };
+}
+
+function getPrimaryAction(primary: any, legacy: any) {
+  if (primary?.action) return primary.action;
+
+  const up = primary?.probabilities?.up ?? 0;
+  const down = primary?.probabilities?.down ?? 0;
+  const legacyRisk = legacy?.exhaustionRiskGauge ?? 0;
+
+  if (up >= 0.39 && down < 0.3712 && legacyRisk < 60) {
+    return {
+      label: 'BUY',
+      className: 'text-emerald-300 border-emerald-600/40 bg-emerald-950/35',
+      reason: 'Upside probability is high while downside risk stays contained.',
+    };
+  }
+
+  if (down >= 0.3712 || legacyRisk >= 75) {
+    return {
+      label: 'SELL',
+      className: 'text-rose-300 border-rose-600/40 bg-rose-950/30',
+      reason: 'Downside probability is high or the trend looks overextended.',
+    };
+  }
+
+  return {
+    label: 'HOLD',
+    className: 'text-cyan-300 border-cyan-600/40 bg-cyan-950/30',
+    reason: 'Signals are mixed, so wait for a cleaner directional edge.',
+  };
+}
+
+function getActionNarrative(item: any) {
+  const supportLabel = getLegacyLeadBadge(item?.legacyLeadPct ?? 0).label;
+  const heatLabel = getExhaustionBadge(item?.riskGauge ?? 0).label;
+  const actionLabel = item?.action?.label ?? 'HOLD';
+  const up = item?.primary?.probabilities?.up ?? 0;
+  const down = item?.primary?.probabilities?.down ?? 0;
+  const buyThreshold = item?.primary?.buyThreshold ?? 0.39;
+  const sellThreshold = item?.primary?.sellThreshold ?? 0.3712;
+  const highHeat = (item?.riskGauge ?? 0) >= 60;
+  const extremeHeat = (item?.riskGauge ?? 0) >= 75;
+
+  if (actionLabel === 'BUY') {
+    return 'Directional edge is confirmed and heat is controlled.';
+  }
+
+  if (actionLabel === 'SELL') {
+    if (extremeHeat && down < sellThreshold) {
+      return `Risk veto: heat is ${heatLabel}, so capital protection takes priority.`;
+    }
+
+    return 'Primary direction is bearish, so bias stays defensive.';
+  }
+
+  if (up >= buyThreshold && highHeat) {
+    return `Upside exists, but heat is ${heatLabel}; waiting for a cleaner entry.`;
+  }
+
+  if (up > down && up < buyThreshold) {
+    return 'Uptrend leads, but it has not cleared the BUY confidence cutoff yet.';
+  }
+
+  if (down >= sellThreshold && supportLabel !== 'Low Support') {
+    return 'Bearish direction is partially offset by support, so action stays neutral.';
+  }
+
+  if (down > up && down < sellThreshold) {
+    return 'Downtrend leads, but not strongly enough to trigger a SELL bias.';
+  }
+
+  return `Mixed setup: support is ${supportLabel} and heat is ${heatLabel}, so no strong edge yet.`;
+}
+
 
 function CustomSelect({ label, icon, value, onChange, options }: any) {
   return (

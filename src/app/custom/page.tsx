@@ -34,6 +34,7 @@ export default function CustomAnalysisPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<any>(null);
+  const [marketAi, setMarketAi] = useState<any>(null);
   const [savedLists, setSavedLists] = useState<any[]>([]);
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [showItemChart, setShowItemChart] = useState(false);
@@ -322,6 +323,43 @@ export default function CustomAnalysisPage() {
     }
   }, [mode, fetchDetailData]);
 
+  // Market-wide AI context from the sector model
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchMarketAi = async () => {
+      try {
+        const params = new URLSearchParams({ interval, rsWindow, rocWindow });
+        if (backtestDate) {
+          params.append('date', backtestDate);
+        }
+
+        const res = await fetch(`/api/market-data?${params.toString()}`);
+        if (!res.ok) {
+          if (!cancelled) setMarketAi(null);
+          return;
+        }
+
+        const json = await res.json();
+        const topSector = (json.sectors || [])
+          .filter((entry: any) => entry?.ml?.primary)
+          .sort((a: any, b: any) => (b.ml.primary.confidence ?? 0) - (a.ml.primary.confidence ?? 0))[0] || null;
+
+        if (!cancelled) {
+          setMarketAi(topSector?.ml ? { name: topSector.name, ml: topSector.ml } : null);
+        }
+      } catch {
+        if (!cancelled) setMarketAi(null);
+      }
+    };
+
+    fetchMarketAi();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [interval, rsWindow, rocWindow, backtestDate]);
+
   // Handle stock search
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -469,6 +507,45 @@ export default function CustomAnalysisPage() {
                   <Target className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
+
+              {marketAi?.primary && (
+                <div className="max-w-7xl mx-auto mb-6">
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="text-white font-bold text-sm sm:text-base flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-cyan-400" /> Market AI Context
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-1">
+                          This is the current top sector signal from the sector model. It gives context for your custom list, not stock-level prediction.
+                        </p>
+                      </div>
+                      <span className="text-[10px] sm:text-xs text-slate-400 bg-slate-950 border border-slate-800 rounded-full px-2.5 py-1">
+                        {marketAi.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs sm:text-sm">
+                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Primary Direction</div>
+                        <div className="text-slate-100 font-semibold">{marketAi.primary.predictedLabel}</div>
+                        <div className="text-slate-400 mt-1">
+                          Up {Math.round((marketAi.primary.probabilities?.up ?? 0) * 100)}% | Down {Math.round((marketAi.primary.probabilities?.down ?? 0) * 100)}%
+                        </div>
+                      </div>
+                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Action</div>
+                        <div className="text-slate-100 font-semibold">{marketAi.primary.action?.label}</div>
+                        <div className="text-slate-400 mt-1">{marketAi.primary.action?.reason}</div>
+                      </div>
+                      <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Legacy Stretch</div>
+                        <div className="text-slate-100 font-semibold">{Math.round(marketAi.legacy?.exhaustionRiskGauge ?? 0)}/100 risk</div>
+                        <div className="text-slate-400 mt-1">Used as a caution overlay.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
                   <h2 className="font-bold text-base text-white">Custom Analysis</h2>
                   <p className="text-xs text-slate-500">Analyze custom lists as sectors or individual stocks</p>
                 </div>

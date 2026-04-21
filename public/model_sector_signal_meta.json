@@ -1,0 +1,32 @@
+{
+  "feature_order": [
+    "RS_Ratio",
+    "RS_Momentum",
+    "Distance",
+    "Angle",
+    "Angular_Velocity",
+    "Acceleration",
+    "Ret_5d",
+    "Vol_20d",
+    "Excess_Ret_5d",
+    "Excess_Ret_20d",
+    "Corr_60d",
+    "Beta_60d",
+    "DD_60d",
+    "Vol_Ratio",
+    "Bench_Ret_20d",
+    "Bench_Vol_20d",
+    "Rank_RS_Ratio",
+    "Rank_RS_Momentum",
+    "Rank_Excess_Ret_20d",
+    "Rank_Vol_20d"
+  ],
+  "class_mapping": {
+    "0": "DOWN",
+    "1": "NEUTRAL",
+    "2": "UP"
+  },
+  "horizon_days": 20,
+  "buy_threshold_p_up": 0.3899714019892388,
+  "sell_threshold_p_down": 0.3712358627716799
+}
