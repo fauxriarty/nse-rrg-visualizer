@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { SECTOR_INDICES } from '@/lib/sectorConfig';
 import { useToast } from '@/components/Toast';
-import { enrichSectorsWithBrowserMl } from '@/lib/ml/browserInference';
+import { enrichSectorsWithBrowserMl, warmupBrowserModels } from '@/lib/ml/browserInference';
 
 // --- CONSTANTS ---
 const INTERVAL_OPTIONS = [
@@ -25,6 +25,7 @@ export default function Home() {
   const requestSeqRef = useRef(0);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingPhase, setLoadingPhase] = useState<'models' | 'history' | 'rrg'>('models');
   const [config, setConfig] = useState<any>(null);
 
   // Configuration State
@@ -237,8 +238,15 @@ export default function Home() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadingPhase('models');
     const requestSeq = ++requestSeqRef.current;
     try {
+      // 1) Ensure models are warm before network fetch so data + ML can render together.
+      await warmupBrowserModels();
+      if (requestSeq !== requestSeqRef.current) return;
+
+      setLoadingPhase('history');
+
       const params = new URLSearchParams({ interval, rsWindow, rocWindow });
       
       // --- APPEND DATE IF BACKTESTING ---
@@ -263,22 +271,24 @@ export default function Home() {
       if (requestSeq !== requestSeqRef.current) return;
 
       if (json.sectors) {
-        setData(json.sectors);
         try {
+          setLoadingPhase('rrg');
           const enriched = await enrichSectorsWithBrowserMl(json.sectors);
           if (requestSeq !== requestSeqRef.current) return;
           setData(enriched);
         } catch (mlError) {
           console.error('[ML][browser][error] Unable to enrich sectors in browser:', mlError);
+          throw mlError;
         }
       }
       if (json.config) setConfig(json.config);
     } catch (err) {
       console.error(err);
+      toast.error('Failed to load AI models or market data. Please refresh once.');
     } finally {
       setLoading(false);
     }
-  }, [interval, rsWindow, rocWindow, backtestDate]); // Trigger fetch when date changes
+  }, [interval, rsWindow, rocWindow, backtestDate, toast]); // Trigger fetch when date changes
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -377,9 +387,19 @@ export default function Home() {
           <div className="w-full h-96 sm:h-125 md:h-150 flex flex-col items-center justify-center bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative overflow-hidden">
              <div className="absolute inset-0 bg-linear-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]"></div>
             <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4 relative z-10" />
-            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">Running RRG Algorithm...</p>
+            <p className="text-slate-300 text-sm font-bold animate-pulse relative z-10">
+              {loadingPhase === 'models'
+                ? 'Loading AI models...'
+                : loadingPhase === 'history'
+                  ? 'Fetching history...'
+                  : 'Running RRG algorithm...'}
+            </p>
             <p className="text-slate-500 text-xs mt-2 relative z-10">
-                {backtestDate ? `Fetching history for ${backtestDate}` : 'Fetching live market data'}
+                {loadingPhase === 'models'
+                  ? 'Downloading model files for this session'
+                  : backtestDate
+                    ? `Fetching history for ${backtestDate}`
+                    : 'Fetching live market data'}
             </p>
           </div>
         ) : (
